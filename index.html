@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>4Pattes Manager</title>
+
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#fafaf9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+<style>
+    body { background-color: #fafaf9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #44403c; margin:0; }
+    input, textarea, select { font-size: 16px !important; }
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    
+    #root { height: 100vh; width: 100vw; display: flex; flex-direction: column; overflow: hidden; }
+    
+    .scroll-view { flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 140px; -webkit-overflow-scrolling: touch; } 
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+
+    .snap-container { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; height: 100%; width: 100%; -webkit-overflow-scrolling: touch; }
+    .snap-page { flex: 0 0 100%; width: 100vw; scroll-snap-align: start; padding: 1rem; overflow-y: auto; padding-bottom: 150px; }
+
+    /* GRILLE CALENDRIER ROBUSTE */
+    .calendar-week {
+        display: flex; width: 100%; border-bottom: 1px solid #e7e5e4; min-height: 50px; position: relative;
+    }
+    .calendar-day {
+        width: 14.2857%; border-right: 1px solid #e7e5e4; position: relative; height: 100%; min-height: 50px;
+        z-index: 1;
+    }
+
+    /* TAMPON PATTE */
+    .paw-stamp {
+        position: absolute; top: 4px; right: 4px; font-size: 2.5rem; width: 50px; height: 50px;
+        display: flex; align-items: center; justify-content: center; color: #fb7185; opacity: 0.4; 
+        transform: rotate(15deg); z-index: 1; 
+        pointer-events: none; 
+    }
+
+    /* SWITCH GENDER (Tri-State) */
+    .gender-select {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 8px;
+        border: 1px solid #e7e5e4;
+        background-color: #fff;
+        overflow: hidden;
+        margin-top: 10px;
+        width: 100%;
+        max-width: 240px;
+    }
+    .gender-btn {
+        flex: 1;
+        padding: 8px 0;
+        text-align: center;
+        font-weight: bold;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-right: 1px solid #e7e5e4;
+    }
+    .gender-btn:last-child { border-right: none; }
+    .gender-btn.active-M { background-color: #3b82f6; color: white; }
+    .gender-btn.active-F { background-color: #f472b6; color: white; }
+    .gender-btn.active-U { background-color: #d6d3d1; color: #44403c; }
+
+
+    .stats-dots-container { position: absolute; bottom: 8rem; left: 0; width: 100%; display: flex; justify-content: center; gap: 0.5rem; pointer-events: none; z-index: 50; }
+    .stats-dot { width: 10px; height: 10px; border-radius: 50%; transition: all 0.3s; border: 1px solid #d6d3d1; }
+    .stats-dot.active { background-color: #fb7185; border-color: #fb7185; width: 12px; height: 12px; }
+    .stats-dot.inactive { background-color: #e7e5e4; }
+
+    .month-picker-trigger { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 50; cursor: pointer; }
+    
+    /* SPLASH SCREEN */
+    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    .splash-fade { animation: fadeOut 0.5s ease-out forwards; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// ⬇️ --- VOS CLÉS FIREBASE ICI --- ⬇️
+const firebaseConfig = {
+    apiKey: "AIzaSyCSbFnk_MX3Ya-Tf21jy3wigy-bp3lCPjE",
+    authDomain: "dogmanager-4747f.firebaseapp.com",
+    projectId: "dogmanager-4747f",
+    storageBucket: "dogmanager-4747f.firebasestorage.app",
+    messagingSenderId: "296838087068",
+    appId: "1:296838087068:web:39cae5ef31862bc4938859"
+  };
+// ⬆️ ----------------------------- ⬆️
+
+try {
+    const app = initializeApp(firebaseConfig);
+    window.db = getFirestore(app);
+    window.fire = { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot };
+} catch(e) { console.error(e); alert("Erreur Config Firebase"); }
+</script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// Palettes de Couleurs Douces (10 nuances pour chaque)
+const COLORS_MALE = [
+    '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', 
+    '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'
+];
+const COLORS_FEMALE = [
+    '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777', 
+    '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777'
+];
+const COLOR_UNKNOWN = '#a8a29e'; // Gris Doux
+
+const S = {
+    nav: "fixed bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-stone-200 h-16 z-50 flex justify-between px-6 pb-safe",
+    iconBox: "flex flex-col items-center justify-center w-16 cursor-pointer",
+    active: "text-rose-400",
+    inactive: "text-stone-300",
+    fabPos: "absolute left-1/2 -translate-x-1/2 -top-6",
+    fab: "bg-rose-400 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl border-4 border-white active:scale-90 transition-transform cursor-pointer",
+    
+    monthNav: "fixed bottom-20 w-full bg-white/95 backdrop-blur-sm border-t border-stone-100 h-14 z-40 flex justify-center items-center gap-8 shadow-sm",
+    monthTitle: "text-lg font-serif font-bold text-stone-700 capitalize relative", 
+    monthBtn: "w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-100 rounded-full transition-colors active:scale-90",
+
+    daysHeader: "flex w-full border-b border-stone-100 bg-stone-50 shrink-0 z-10 relative h-8 items-center",
+    dayHeaderCell: "flex-1 text-center text-[10px] font-bold text-stone-400 py-2 uppercase tracking-wider",
+    
+    overlay: "fixed inset-0 z-[60] bg-stone-900/50 flex justify-center items-end sm:items-center backdrop-blur-sm",
+    modal: "bg-white w-full h-[95vh] rounded-t-3xl flex flex-col overflow-hidden shadow-2xl max-w-md mx-auto",
+    modalHead: "flex justify-between items-center p-4 border-b bg-stone-50",
+    input: "w-full border border-stone-200 rounded-xl p-3 mt-1 bg-white focus:ring-2 focus:ring-rose-200 outline-none text-stone-600",
+    label: "text-xs font-bold text-stone-400 uppercase mt-3 block tracking-wide",
+    btn: "bg-rose-400 text-white font-bold py-3 rounded-xl w-full shadow-lg shadow-rose-100 mt-4 active:scale-[0.98] transition-transform",
+    
+    statCard: "bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex flex-col justify-center",
+    statTitle: "text-stone-400 text-xs uppercase font-bold tracking-widest",
+    
+    card: "bg-white p-3 rounded-xl shadow-sm mb-2 flex items-center gap-4 border border-stone-100 active:scale-[0.99] transition-transform cursor-pointer",
+    avatar: "w-10 h-10 rounded-full object-cover border border-stone-200 bg-stone-100 flex items-center justify-center text-stone-400 font-bold",
+    avatarLarge: "w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-stone-100 flex items-center justify-center text-stone-400 text-3xl font-bold",
+    
+    rangeOverlay: "fixed inset-0 z-[70] bg-stone-900/50 flex items-center justify-center backdrop-blur-md",
+    rangeBox: "bg-white w-10/12 max-w-xs rounded-3xl p-3 shadow-2xl",
+    rangeGrid: "grid grid-cols-7 gap-1 p-1",
+    rangeCell: "aspect-square flex items-center justify-center rounded-full text-xs font-bold relative transition-all cursor-pointer"
+};
+
+function App() {
+    const [splash, setSplash] = useState(true);
+    const [view, setView] = useState('calendar');
+    const [bookings, setBookings] = useState([]);
+    const [dogs, setDogs] = useState([]);
+    const [date, setDate] = new useState(new Date());
+    
+    const [modal, setModal] = useState(false);
+    const [editId, setEditId] = useState(null);
+    const [isDogMode, setIsDogMode] = useState(false);
+    const [fullImg, setFullImg] = useState(null);
+    const [selectedDog, setSelectedDog] = useState(null);
+    
+    const [isRangeOpen, setIsRangeOpen] = useState(false);
+    const [pickerViewDate, setPickerViewDate] = useState(new Date());
+    const [rangeSel, setRangeSel] = useState({ start: null, end: null });
+
+    const [showTable, setShowTable] = useState(false);
+
+    const defForm = { 
+        dogId:'', dogName:'', breed:'', ownerName:'', phone:'', 
+        start:'', end:'', price:'', notes:'', photo:null, source:'',
+        paymentStatus:'pending', deposit:'',
+        isAllDay: true, startTime: '09:00', endTime: '18:00',
+        gender: 'U' // CHANGEMENT: Défaut 'U' (Inconnu)
+    };
+    const [form, setForm] = useState(defForm);
+    const [statsYear, setStatsYear] = useState(new Date().getFullYear());
+
+    // --- LOGIQUE DE COULEUR PAR GENRE ---
+    const getGenderColor = (gender, dogId) => {
+        if (gender === 'U') return COLOR_UNKNOWN;
+        
+        const palette = gender === 'F' ? COLORS_FEMALE : COLORS_MALE;
+        
+        // Trouver le chien existant ou tous les chiens du genre opposé pour un index de couleur
+        const existingDog = dogs.find(d => d.id === dogId && d.gender === gender);
+        
+        if (existingDog && existingDog.color) {
+            // Si le chien existe et a déjà cette couleur, la garder
+            return existingDog.color;
+        }
+
+        // Si nouveau ou genre changé, attribuer la prochaine couleur disponible
+        const dogsOfSameGender = dogs.filter(d => d.gender === gender);
+        const count = dogsOfSameGender.length;
+        
+        return palette[count % palette.length];
+    };
+    // ------------------------------------
+
+    useEffect(() => {
+        const handleBack = (event) => {
+            if (modal) setModal(false);
+            else if (selectedDog) setSelectedDog(null);
+            else if (showTable) setShowTable(false);
+            else if (isRangeOpen) setIsRangeOpen(false);
+        };
+        window.addEventListener('popstate', handleBack);
+        return () => window.removeEventListener('popstate', handleBack);
+    }, [modal, selectedDog, isRangeOpen, showTable]);
+
+    const pushHistory = () => { window.history.pushState({ modal: true }, ''); };
+
+    useEffect(() => {
+        const timer = setTimeout(() => setSplash(false), 2000); 
+        setTimeout(() => {
+            if (!window.fire) return;
+            const { collection, onSnapshot } = window.fire;
+            const db = window.db;
+            onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
+            onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const openForm = (type, data = {}) => {
+        pushHistory(); setEditId(data.id || null); setIsDogMode(type === 'dog');
+        let initialData = defForm;
+
+        if (type === 'dog') {
+            initialData = { ...data, dogId: data.id, dogName: data.name, ownerName: data.owner, breed: data.breed, phone: data.phone, gender: data.gender || 'U' };
+        } else if (type === 'edit') {
+            initialData = { ...data };
+            if (!initialData.phone && data.dogId) { 
+                const linked = dogs.find(d => d.id === data.dogId); 
+                if (linked) { initialData.phone = linked.phone; initialData.photo = linked.photo; } 
+            }
+            initialData.photo = data.photo || initialData.photo; 
+            
+            initialData.isAllDay = data.isAllDay === undefined ? true : data.isAllDay;
+            initialData.startTime = data.startTime || defForm.startTime;
+            initialData.endTime = data.endTime || defForm.endTime;
+            // Récupère le genre stocké dans la réservation ou le chien lié
+            initialData.gender = data.gender || (dogs.find(d => d.id === data.dogId)?.gender) || 'U'; 
+
+        } else if (type === 'new') {
+            initialData = { ...defForm, start: data.date || '' };
+        }
+        setForm(initialData); setModal(true);
+    };
+
+    const sendMail = (action, data, oldData = null) => {
+        const emails = "a.lorillon@gmail.com,g.lorillon16@gmail.com";
+        const subject = encodeURIComponent(`[4Pattes] ${action} : ${data.dogName}`);
+        
+        let body = `🐶 ${action} - ${data.dogName}\n\n`;
+        
+        if (data.isAllDay) {
+            body += `📅 NOUVEAU : Du ${new Date(data.start).toLocaleDateString()} Au ${new Date(data.end).toLocaleDateString()}\n`;
+        } else {
+            body += `📅 NOUVEAU : Du ${new Date(data.start).toLocaleString()} Au ${new Date(data.end).toLocaleString()}\n`;
+        }
+        body += `⏰ Journée entière : ${data.isAllDay ? 'Oui' : 'Non (' + data.startTime + ' - ' + data.endTime + ')'}\n`;
+        
+        if (oldData) {
+            body += `\n--- Anciennes Données ---\n`;
+            if (oldData.isAllDay) {
+                body += `📅 ANCIEN : Du ${new Date(oldData.start).toLocaleDateString()} Au ${new Date(oldData.end).toLocaleDateString()}\n`;
+            } else {
+                body += `📅 ANCIEN : Du ${new Date(oldData.start).toLocaleString()} Au ${new Date(oldData.end).toLocaleString()}\n`;
+            }
+            body += `⏰ ANCIENNE JOURNÉE ENTIÈRE : ${oldData.isAllDay ? 'Oui' : 'Non (' + oldData.startTime + ' - ' + oldData.endTime + ')'}\n`;
+        }
+
+        body += `\n💰 Prix : ${data.price || 0} €\n`;
+        body += `📝 Notes : ${data.notes || "Aucune"}\n`;
+        body += `Propriétaire : ${data.ownerName || "Inconnu"}\n`;
+        body += `Tél : ${data.phone || ""}`;
+
+        const link = `mailto:${emails}?subject=${subject}&body=${encodeURIComponent(body)}`;
+        setTimeout(() => { window.location.href = link; }, 500);
+    };
+
+    const save = async () => {
+        if (!window.fire) return alert("Firebase HS");
+        try {
+            const { addDoc, updateDoc, doc, collection } = window.fire;
+            const db = window.db;
+            let dId = form.dogId;
+            const clean = (val) => val === undefined || val === null ? "" : val;
+
+            // DÉTERMINER LA COULEUR AVANT DE SAUVEGARDER LE CHIEN
+            const newColor = getGenderColor(form.gender, dId);
+            
+            const dogData = { 
+                name: clean(form.dogName)||"Inconnu", 
+                breed: clean(form.breed), 
+                owner: clean(form.ownerName), 
+                phone: clean(form.phone), 
+                notes: clean(form.notes), 
+                photo: form.photo||null, 
+                color: newColor, // COULEUR DYNAMIQUE
+                gender: form.gender // AJOUT/MAJ DU GENRE
+            };
+
+            if (dId) { 
+                await updateDoc(doc(db, "dogs", dId), dogData);
+            } 
+            else { 
+                const ref = await addDoc(collection(db, "dogs"), {...dogData}); 
+                dId = ref.id; 
+            }
+
+            if (!isDogMode) {
+                const isAllDay = form.isAllDay;
+                
+                let startDate = clean(form.start) || '';
+                let endDate = clean(form.end) || '';
+
+                if (!startDate || !endDate) {
+                    alert("Veuillez sélectionner une période de séjour valide.");
+                    return;
+                }
+
+                if (!isAllDay) {
+                    const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate;
+                    const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate;
+                    
+                    startDate = baseStart + 'T' + clean(form.startTime) + ':00';
+                    endDate = baseEnd + 'T' + clean(form.endTime) + ':00';
+                } else if (startDate.includes('T')) {
+                    startDate = startDate.split('T')[0];
+                    endDate = endDate.split('T')[0];
+                }
+
+                let price = clean(form.price) || "0";
+                let deposit = clean(form.deposit) || "";
+                if (form.paymentStatus === 'appointment') {
+                    price = "0";
+                    deposit = "";
+                }
+
+                const bookData = {
+                    dogId: dId, dogName: clean(form.dogName), breed: clean(form.breed), ownerName: clean(form.ownerName), phone: clean(form.phone),
+                    price: price, start: startDate, end: endDate, color: newColor, 
+                    notes: clean(form.notes), source: clean(form.source),
+                    paymentStatus: form.paymentStatus||'pending', deposit: deposit,
+                    isAllDay: isAllDay, startTime: clean(form.startTime), endTime: clean(form.endTime),
+                    photo: form.photo || null,
+                    gender: form.gender // AJOUT DU GENRE A LA RÉSERVATION
+                };
+                if (editId) {
+                    const oldBooking = bookings.find(b => b.id === editId);
+                    await updateDoc(doc(db, "bookings", editId), bookData);
+                    if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) sendMail("MODIFICATION DATES", bookData, oldBooking);
+                } else { await addDoc(collection(db, "bookings"), bookData); sendMail("NOUVELLE RÉSERVATION", bookData); }
+            }
+            setModal(false);
+        } catch (err) { console.error(err); alert("Erreur: "+err.message); }
+    };
+
+    const remove = async () => {
+        if(!confirm("Supprimer ?")) return;
+        const { deleteDoc, doc } = window.fire;
+        const db = window.db;
+        if (isDogMode) { await deleteDoc(doc(db, "dogs", form.id)); setSelectedDog(null); }
+        else { const dataBackup = { ...form }; await deleteDoc(doc(db, "bookings", editId)); sendMail("SUPPRESSION", dataBackup); }
+        setModal(false);
+    };
+
+    const onPhoto = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX_SIZE = 150; 
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_SIZE) {
+                        height *= MAX_SIZE / width;
+                        width = MAX_SIZE;
+                    }
+                } else {
+                    if (height > MAX_SIZE) {
+                        width *= MAX_SIZE / height;
+                        height = MAX_SIZE;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const resizedDataURL = canvas.toDataURL('image/jpeg', 0.6);
+                setForm(prev => ({...prev, photo: resizedDataURL}));
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    const pickDog = (d) => setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, notes:d.notes, photo:d.photo, gender: d.gender || 'U' });
+    
+    const openRange = () => {
+        pushHistory(); 
+        const startDate = form.start || null;
+        const endDate = form.end || null;
+        const startObj = startDate && !isNaN(new Date(startDate)) ? new Date(startDate) : null;
+        const endObj = endDate && !isNaN(new Date(endDate)) ? new Date(endDate) : null;
+        
+        setRangeSel({ start: startObj, end: endObj });
+        setPickerViewDate(startObj || new Date()); 
+        setIsRangeOpen(true);
+    };
+
+    const handleRangeClick = (d) => { let { start, end } = rangeSel; if (!start || (start && end)) { setRangeSel({ start: d, end: null }); } else { const s = d < start ? d : start; const e = d < start ? start : d; setRangeSel({ start: s, end: e }); setTimeout(() => { const toLocal = (dt) => { const offset = dt.getTimezoneOffset() * 60000; return new Date(dt.getTime() - offset).toISOString().split('T')[0]; }; setForm(prev => ({ ...prev, start: toLocal(s), end: toLocal(e) })); setIsRangeOpen(false); }, 300); } };
+    
+    const exportData = () => {
+        let csvContent = "\uFEFFDate Début;Date Fin;Nom Chien;Race;Propriétaire;Téléphone;Source;Prix;Statut Paiement;Acompte;Notes\n";
+        bookings.forEach(b => {
+            const dog = dogs.find(d => d.id === b.dogId) || {};
+            let st = "À Payer"; if(b.paymentStatus==='deposit') st="Acompte"; if(b.paymentStatus==='paid') st="Payé"; else if (b.paymentStatus==='appointment') st="RDV";
+            const row = [ b.start, b.end, b.dogName, dog.breed||b.breed||"", b.ownerName, dog.phone||b.phone||"", b.source||"", b.price, st, b.deposit||"", `"${(b.notes||"").replace(/"/g,'""')}"` ];
+            csvContent += row.join(";") + "\n";
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `DogManager_Export_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    };
+
+    // --- RangePickerModal Definition ---
+    const RangePickerModal = ({ isRangeOpen, setIsRangeOpen, rangeSel, setRangeSel, pickerViewDate, setPickerViewDate, handleRangeClick }) => {
+        if (!isRangeOpen) return null;
+        const daysInMonth = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth() + 1, 0).getDate();
+        const startOffset = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), 1).getDay() || 7;
+        
+        return (
+            <div className={S.rangeOverlay}>
+                <div className={S.rangeBox}>
+                    <div className="flex justify-between items-center mb-2 px-2">
+                        <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()-1)))} className="p-1"><i className="fas fa-chevron-left text-xs"></i></button>
+                        <span className="font-bold text-sm capitalize text-stone-700 font-serif">{pickerViewDate.toLocaleString('fr-FR', {month:'long', year:'numeric'})}</span>
+                        <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()+1)))} className="p-1"><i className="fas fa-chevron-right text-xs"></i></button>
+                    </div>
+                    <div className="grid grid-cols-7 text-center text-[10px] font-bold text-stone-300 mb-1">
+                        {['L','M','Me','J','V','S','D'].map((d, i) => <div key={i}>{d}</div>)}
+                    </div>
+                    <div className={S.rangeGrid}>
+                        {Array.from({length: startOffset-1}).map((_,i) => <div key={`empty-${i}`}></div>)}
+                        {Array.from({length: daysInMonth}).map((_, i) => {
+                            const d = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), i+1);
+                            const isStart = rangeSel.start && d.toDateString() === rangeSel.start.toDateString();
+                            const isEnd = rangeSel.end && d.toDateString() === rangeSel.end.toDateString();
+                            const isIn = rangeSel.start && rangeSel.end && d > rangeSel.start && d < rangeSel.end;
+                            return (
+                                <div key={i} onClick={() => handleRangeClick(d)} 
+                                     className={`${S.rangeCell} ${isStart || isEnd ? 'bg-rose-400 text-white shadow-lg scale-110 z-10' : isIn ? 'bg-rose-50 text-rose-400' : 'bg-stone-50 text-stone-600'}`}>
+                                    {i+1}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="text-center mt-2">
+                        <button onClick={() => setIsRangeOpen(false)} className="text-stone-400 font-bold text-xs">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const Calendar = () => {
+        const y = date.getFullYear(), m = date.getMonth();
+        const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1));
+        let weeks = [], curr = new Date(start);
+        for(let w=0; w<6; w++) {
+            let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); }
+            if(w>4 && days[0].getMonth() !== m) break;
+            const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999);
+            const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
+            const items = evts.map(ev => {
+                const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1;
+                let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6;
+                return { ...ev, dur, st, en };
+            });
+            const placed = []; const rows = [];
+            items.forEach(ev => { let rowIdx = 0; while(true) { if(!rows[rowIdx]) rows[rowIdx] = Array(7).fill(false); let fit = true; for(let i=ev.st; i<=ev.en; i++) if(rows[rowIdx][i]) fit=false; if(fit) { for(let i=ev.st; i<=ev.en; i++) rows[rowIdx][i] = true; placed.push({...ev, row: rowIdx}); break; } rowIdx++; } });
+            weeks.push({days, items: placed});
+        }
+        return (
+            <div className="flex flex-col h-full overflow-hidden">
+                <div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div>
+                <div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>
+                    {weeks.map((w,i) => (
+                        <div key={i} className="calendar-week" style={{flex:1}}>
+                            {w.days.map((d,j) => {
+                                const isToday = d.toDateString() === new Date().toDateString();
+                                return <div key={j} className={`calendar-day`} onClick={()=>openForm('new',{date:d.toISOString().split('T')[0]})}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>;
+                            })}
+                            {w.items.map(ev => (
+                                <div key={ev.id} className="absolute h-5 rounded-md text-[9px] text-stone-700 font-bold px-1 overflow-hidden z-10 border border-white/50 cursor-pointer shadow-sm flex items-center gap-1" style={{backgroundColor:ev.color, left:`${ev.st*14.28}%`, width:`${(ev.en-ev.st+1)*14.28}%`, top:`${25 + ev.row*20}px`, opacity: 0.8}} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}>
+                                    
+                                    {ev.paymentStatus === 'appointment' ? (
+                                        <>
+                                            <span className="truncate">{ev.dogName}</span>
+                                            <i className="fas fa-calendar-check text-[9px] ml-1 shrink-0"></i>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {ev.paymentStatus==='pending' && <div className="w-2 h-2 rounded-full bg-red-500 border border-white shrink-0"></div>}
+                                            {ev.paymentStatus==='deposit' && <div className="w-2 h-2 rounded-full bg-orange-400 border border-white shrink-0"></div>}
+                                            <span className="truncate">{ev.dogName} <span className="opacity-75 text-[9px]">({ev.dur}j)</span></span>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                    <div style={{height:'140px'}}></div>
+                </div>
+                <div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div>
+            </div>
+        );
+    };
+
+    const Stats = () => {
+        const total = bookings.reduce((s,b)=>s+Number(b.price||0),0);
+        const yTotal = bookings.filter(b=>b.start.startsWith(statsYear)).reduce((s,b)=>s+Number(b.price||0),0);
+        const getFinancials = () => {
+            let globalTotal = 0; let yearTotal = 0; const monthlyData = Array(12).fill(0);
+            bookings.forEach(b => {
+                const price = Number(b.price || 0); if(price === 0) return; const start = new Date(b.start); start.setHours(12); const end = new Date(b.end); end.setHours(12);
+                const nbDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1); const pricePerDay = price / nbDays; globalTotal += price;
+                let current = new Date(start); for(let i=0; i<nbDays; i++){ if(current.getFullYear()===statsYear) { monthlyData[current.getMonth()]+=pricePerDay; yearTotal+=pricePerDay; } current.setDate(current.getDate()+1); }
+            }); return { globalTotal, yearTotal, monthlyData };
+        };
+        const { globalTotal: gTotal, yearTotal: yrTotal, monthlyData } = getFinancials();
+        const getDogStats = () => { const stats = {}; bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; stats[n] = (stats[n]||0) + Number(b.price||0); }); return Object.entries(stats).map(([name, val]) => ({name, val})).sort((a,b) => b.val - a.val); };
+        const dogStats = getDogStats();
+        const [activeSnap, setActiveSnap] = useState(0);
+
+        useEffect(() => {
+            if(document.getElementById('cBar')) {
+                if(window.bC) window.bC.destroy(); window.bC = new Chart(document.getElementById('cBar'), {type:'bar', data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'], datasets:[{label:'CA', data:monthlyData, backgroundColor:'#fb7185', borderRadius:4}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
+            }
+            if(document.getElementById('cPie')) {
+                 const dRev={}; const sRev={};
+                 bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; dRev[n]=(dRev[n]||0)+Number(b.price||0); sRev[b.source||"Autre"]=(sRev[b.source||"Autre"]||0)+Number(b.price||0); });
+                 
+                 const sortedDogRevenue = Object.entries(dRev).sort(([, a], [, b]) => b - a);
+                 const dogLabels = sortedDogRevenue.map(([name]) => name);
+                 const dogData = sortedDogRevenue.map(([, val]) => val);
+                 
+                 const sortedSourceRevenue = Object.entries(sRev).sort(([, a], [, b]) => b - a);
+                 const sourceLabels = sortedSourceRevenue.map(([name]) => name);
+                 const sourceData = sortedSourceRevenue.map(([, val]) => val);
+                 
+                 if(window.pC) window.pC.destroy(); 
+                 window.pC = new Chart(document.getElementById('cPie'), {type:'doughnut', data:{labels:dogLabels, datasets:[{data:dogData, backgroundColor:COLORS}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
+                 
+                 if(window.sC) window.sC.destroy(); 
+                 window.sC = new Chart(document.getElementById('cSource'), {type:'doughnut', data:{labels:sourceLabels, datasets:[{data:sourceData, backgroundColor:COLORS.slice().reverse()}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
+            }
+        }, [statsYear, bookings, dogs, showTable]);
+
+        const handleScroll = (e) => {
+            const page = Math.round(e.target.scrollLeft / e.target.clientWidth);
+            setActiveSnap(page);
+        };
+
+        return (
+            <>
+                <div className="snap-container" onScroll={(e)=>setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth))}>
+                    <div className="snap-page"><div className="bg-white p-6 rounded-3xl shadow-sm mb-4 border border-stone-100"><div className={S.statTitle}>CA Global</div><div className="text-4xl font-serif font-bold text-stone-700 mt-2">{Math.round(gTotal)} €</div></div><div className="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex-1 min-h-[300px] flex flex-col"><div className="flex justify-between items-center mb-2"><button onClick={()=>setStatsYear(statsYear-1)}>◀</button><div className="text-center"><div className={S.statTitle}>CA {statsYear}</div><div className="text-xl font-bold text-rose-400">{Math.round(yrTotal)} €</div></div><button onClick={()=>setStatsYear(statsYear+1)}>▶</button></div><div className="flex-1 relative min-h-0"><canvas id="cBar"></canvas></div></div><button onClick={exportData} className="w-full bg-stone-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-20"><i className="fas fa-file-csv"></i> Export CSV</button></div>
+                    <div className="snap-page"><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 h-[45%] flex flex-col relative"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400 flex items-center gap-2 z-20 w-full">PAR CHIEN <button onClick={()=>setShowTable(true)} className="ml-auto mr-8 bg-stone-100 px-3 py-1 rounded-full text-stone-600 hover:bg-stone-200 border border-stone-200 shadow-sm pointer-events-auto"><i className="fas fa-list"></i></button></div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cPie"></canvas></div></div><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 h-[45%] flex flex-col relative"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400">PAR SOURCE</div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cSource"></canvas></div></div></div>
+                </div>
+                <div className="stats-dots-container"><div className={`stats-dot ${activeSnap===0 ? 'active' : 'inactive'}`}></div><div className={`stats-dot ${activeSnap===1 ? 'active' : 'inactive'}`}></div></div>
+                {showTable && <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail par Chien</h3><button onClick={()=>setShowTable(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4"><table className="w-full text-sm text-left text-stone-600"><thead className="text-xs text-stone-400 uppercase bg-stone-50"><tr><th className="px-4 py-2">Nom</th><th className="px-4 py-2 text-right">CA Total</th></tr></thead><tbody>{dogStats.map((d, i) => <tr key={i} className="border-b border-stone-100"><td className="px-4 py-3 font-bold">{d.name}</td><td className="px-4 py-3 text-right text-rose-400 font-bold">{Math.round(d.val)} €</td></tr>)}</tbody></table></div></div></div>}
+            </>
+        );
+    };
+
+    const Directory = () => {
+        const [filter, setFilter] = useState('');
+        const openDetail = (d) => { pushHistory(); setSelectedDog(d); };
+        if (selectedDog) {
+            const history = bookings.filter(b => b.dogId === selectedDog.id).sort((a,b) => new Date(b.start) - new Date(a.start));
+            return ( <div className="scroll-view p-4 bg-stone-50"><div className="flex justify-between items-center mb-6"><button onClick={()=>setSelectedDog(null)} className="text-rose-400 font-bold flex items-center gap-2"><i className="fas fa-arrow-left"></i> Retour</button><button onClick={()=>openForm('dog', selectedDog)} className="w-8 h-8 bg-white rounded-full text-stone-400 shadow">✎</button></div><div className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center mb-4">{selectedDog.photo ? <img src={selectedDog.photo} onClick={()=>setFullImg(selectedDog.photo)} className={S.avatarLarge + " cursor-pointer"} /> : <div className={S.avatarLarge} style={{background:selectedDog.color, color:'#fff'}}>{selectedDog.name[0]}</div>}<h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">{selectedDog.name}</h2><p className="text-stone-500 font-medium italic">{selectedDog.breed}</p><p className="text-stone-400">{selectedDog.owner}</p><div className="flex gap-4 mt-4"><a href={`tel:${selectedDog.phone}`} className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-xl">📞</a><a href={`sms:${selectedDog.phone}`} className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xl">💬</a><a href={`https://wa.me/${selectedDog.phone}`} className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl">📱</a></div><div className="mt-6 w-full bg-stone-50 p-4 rounded-xl text-sm italic text-stone-600 border border-stone-100">{selectedDog.notes || "Aucune note."}</div><button onClick={()=>{openForm('new'); pickDog(selectedDog);}} className={S.btn}>Nouvelle Garde</button></div><h3 className="text-stone-400 text-xs uppercase font-bold tracking-widest mb-2">Historique</h3>{history.map(h => (<div key={h.id} className="bg-white p-4 rounded-xl mb-2 flex justify-between shadow-sm border border-stone-100 cursor-pointer" onClick={() => openForm('edit', h)}><span className="text-stone-600 font-medium">Du {new Date(h.start).toLocaleDateString()} au {new Date(h.end).toLocaleDateString()}</span><span className="font-bold text-rose-400">{h.price} €</span></div>))}</div> );
+        }
+        const sorted = dogs.sort((a,b) => a.name.localeCompare(b.name));
+        const grouped = sorted.reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {});
+        const letters = Object.keys(grouped).sort();
+        return ( <div className="flex h-full bg-stone-50"><div className="flex-1 overflow-y-auto p-4 pb-32 no-scrollbar scroll-smooth"><input className="w-full p-4 rounded-2xl border-none shadow-sm mb-4 text-stone-600 outline-none placeholder-stone-300 sticky top-0 z-10" placeholder="Rechercher..." value={filter} onChange={e=>setFilter(e.target.value)} />{filter ? (dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))).map(d => (<div key={d.id} onClick={() => openDetail(d)} className={S.card}>{d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div></div>))) : (letters.map(l => (<div key={l} id={`letter-${l}`} className="mb-4"><div className="text-xs font-bold text-rose-400 mb-2 pl-2 sticky top-14 bg-stone-50 z-0">{l}</div>{grouped[l].map(d => (<div key={d.id} onClick={() => openDetail(d)} className={S.card}>{d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div></div>))}</div>)))}</div>{!filter && (<div className="absolute right-1 top-20 bottom-32 w-6 flex flex-col justify-center items-center z-40 text-[10px] font-bold text-rose-400 bg-white/50 rounded-full">{letters.map(l => <div key={l} className="flex-1 w-full flex items-center justify-center" onClick={()=>{document.getElementById(`letter-${l}`).scrollIntoView({behavior:'auto'})}}>{l}</div>)}</div>)}</div> );
+    };
+
+    if (splash) return ( <div className={S.splash}><img src="logo.png" className={S.splashLogo} /><h1 className={S.splashTitle}>4Pattes Manager</h1><div className={S.splashSub}>Chargement...</div></div> );
+
+    // Fonction pour gérer le basculement du genre
+    const handleGenderChange = (newGender) => {
+        // Logique de basculement: M -> F -> U -> M
+        let nextGender = form.gender;
+        
+        if (newGender === 'M' && form.gender !== 'M') {
+            nextGender = 'M';
+        } else if (newGender === 'F' && form.gender !== 'F') {
+            nextGender = 'F';
+        } else {
+            // Si on clique sur le genre actuel (M ou F), on revient à Inconnu.
+            // Si on clique sur Inconnu, on passe à Mâle (choix par défaut)
+            nextGender = newGender === 'U' ? 'M' : 'U';
+        }
+
+        if (nextGender === form.gender) {
+             // Si le clic ne change rien (par ex. si on clique sur M alors qu'on est déjà à M, on passe à U)
+             nextGender = form.gender === 'M' ? 'U' : form.gender === 'F' ? 'U' : 'M';
+        } else {
+             nextGender = newGender;
+        }
+
+        setForm({...form, gender: newGender});
+    };
+    
+    // Composant Gender Switch à trois états
+    const GenderSwitchComponent = () => {
+        const currentGender = form.gender || 'U';
+        
+        return (
+            <div className="flex items-center gap-4 mt-3">
+                <label className={S.label}>Genre</label>
+                <div className="gender-select">
+                    <div 
+                        className={`gender-btn ${currentGender === 'M' ? 'active-M' : ''}`}
+                        onClick={() => setForm({...form, gender: 'M'})}
+                    >
+                        Mâle ♂
+                    </div>
+                    <div 
+                        className={`gender-btn ${currentGender === 'U' ? 'active-U' : ''}`}
+                        onClick={() => setForm({...form, gender: 'U'})}
+                    >
+                        Inconnu
+                    </div>
+                    <div 
+                        className={`gender-btn ${currentGender === 'F' ? 'active-F' : ''}`}
+                        onClick={() => setForm({...form, gender: 'F'})}
+                    >
+                        Femelle ♀
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-stone-50">
+            <div className="flex-1 overflow-hidden relative">{view==='calendar' && <Calendar/>}{view==='directory' && <Directory/>}{view==='stats' && <Stats/>}</div>
+            <div className={S.nav}><div className="flex gap-8"><div onClick={()=>setView('calendar')} className={S.iconBox}><i className={`fas fa-calendar-alt text-2xl ${view==='calendar'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Agenda</span></div><div onClick={()=>setView('directory')} className={S.iconBox}><i className={`fas fa-address-book text-2xl ${view==='directory'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Carnet</span></div></div><div className={S.fabPos}><button onClick={()=>openForm('new', {})} className={S.fab}><i className="fas fa-plus text-2xl"></i></button></div><div className="flex justify-end w-32"><div onClick={()=>setView('stats')} className={S.iconBox}><i className={`fas fa-chart-pie text-2xl ${view==='stats'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Stats</span></div></div></div>
+            {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
+            {modal && (
+                <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">{isDogMode?'Fiche Chien':(editId?'Modifier':'Nouveau')}</h3><button onClick={()=>setModal(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4 space-y-4"><div className="flex gap-4 items-center"><div className="relative w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-stone-200 shrink-0">{form.photo ? <img src={form.photo} className="w-full h-full object-cover"/> : <span className="text-2xl text-stone-300">📷</span>}<input type="file" onChange={onPhoto} className="absolute inset-0 opacity-0"/></div><div className="flex-1">{!editId && !isDogMode && (<select className="w-full mb-2 p-2 rounded-lg bg-stone-100 text-xs border-none" onChange={e => {const d=dogs.find(x=>x.id===e.target.value); if(d) pickDog(d);}}><option value="">Remplir depuis carnet...</option>{dogs.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select>)}<input className={S.input} value={form.dogName||''} onChange={e=>setForm({...form, dogName:e.target.value})} placeholder="Nom Chien" /><input className={S.input} value={form.breed||''} onChange={e=>setForm({...form, breed:e.target.value})} placeholder="Race" />{GenderSwitchComponent()}</div></div>{!isDogMode && (<div><div onClick={openRange} className="bg-rose-50 p-4 rounded-2xl border border-rose-100 flex justify-between items-center active:bg-rose-100 transition cursor-pointer mb-2"><div><div className="text-xs font-bold text-rose-400 uppercase mb-1">Séjour</div><div className="font-bold text-stone-700 text-lg leading-tight">{form.start ? new Date(form.start).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Arrivée'} ➝ {form.end ? new Date(form.end).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Départ'}</div></div><i className="fas fa-calendar-alt text-rose-300 text-2xl"></i></div><div className="flex items-center gap-2 mb-2"><input type="checkbox" checked={form.isAllDay} onChange={(e) => setForm({...form, isAllDay: e.target.checked})} className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500"/><label className="text-sm font-medium text-stone-700">Journée entière</label></div>{!form.isAllDay && (<div className="flex gap-2 mt-2 mb-4"><div className="flex-1"><label className={S.label}>Heure Arrivée</label><input type="time" className={S.input} value={form.startTime||''} onChange={e=>setForm({...form, startTime:e.target.value})}/></div><div className="flex-1"><label className={S.label}>Heure Départ</label><input type="time" className={S.input} value={form.endTime||''} onChange={e=>setForm({...form, endTime:e.target.value})}/></div></div>)}<label className={S.label}>SOURCE</label><input className={S.input} list="sources" value={form.source||''} onChange={e=>setForm({...form, source:e.target.value})} placeholder="ex: Rover, Fidélisé..." /><datalist id="sources"><option value="Le Bon Coin"/><option value="Rover"/><option value="Animaute"/><option value="Fidélisé"/><option value="Bouche à oreille"/></datalist></div>)}<input className={S.input} value={form.ownerName||''} onChange={e=>setForm({...form, ownerName:e.target.value})} placeholder="Propriétaire" /><input className={S.input} type="tel" value={form.phone||''} onChange={e=>setForm({...form, phone:e.target.value})} placeholder="Téléphone" />{!isDogMode && (<div><div className="flex gap-2 mb-2"><div className="flex-1"><label className={S.label}>PRIX TOTAL</label><input className={S.input} type="number" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})} placeholder="€" disabled={form.paymentStatus === 'appointment'} /></div><div className="flex-1"><label className={S.label}>PAIEMENT</label><select className={S.input} value={form.paymentStatus||'pending'} onChange={e=>setForm({...form, paymentStatus:e.target.value, price: e.target.value === 'appointment' ? '0' : form.price, deposit: e.target.value === 'appointment' ? '' : form.deposit })}><option value="pending">🔴 À Payer</option><option value="deposit">🟠 Acompte</option><option value="paid">🟢 Payé</option><option value="appointment">🗓️ RDV</option></select></div></div>{form.paymentStatus === 'deposit' && (<div className="bg-orange-50 p-2 rounded-lg border border-orange-100 flex items-center gap-2 mb-2"><input className="w-20 p-1 text-sm border rounded" type="number" placeholder="Reçu" value={form.deposit||''} onChange={e=>setForm({...form, deposit:e.target.value})} /><span className="text-xs text-orange-800 font-bold">€ reçu. Reste : <span className="text-lg">{(form.price||0) - (form.deposit||0)} €</span></span></div>)}</div>)}<textarea className={`${S.input} h-24`} value={form.notes||''} onChange={e=>setForm({...form, notes:e.target.value})} placeholder="Notes..." /></div><div className="p-4 bg-white border-t flex gap-2"><button onClick={save} className={S.btn}>Valider</button>{(editId||isDogMode) && <button onClick={remove} className="text-red-400 font-bold px-4 mt-4">Sup.</button>}</div></div></div>
+            )}
+            {fullImg && <div className={S.overlay} onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
+        </div>
+    );
+}
+const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+</script>
+</body>
+</html>
