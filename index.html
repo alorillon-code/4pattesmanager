@@ -33,94 +33,36 @@
     .snap-page { flex: 0 0 100%; width: 100vw; scroll-snap-align: start; padding: 1rem; overflow-y: auto; padding-bottom: 150px; }
 
     /* GRILLE CALENDRIER ROBUSTE */
-    .calendar-week {
-        display: flex; width: 100%; border-bottom: 1px solid #e7e5e4; min-height: 50px; position: relative;
-    }
-    .calendar-day {
-        width: 14.2857%; border-right: 1px solid #e7e5e4; position: relative; height: 100%; min-height: 50px;
-        z-index: 1;
-    }
+    .calendar-week { display: flex; width: 100%; border-bottom: 1px solid #e7e5e4; min-height: 50px; position: relative; }
+    .calendar-day { width: 14.2857%; border-right: 1px solid #e7e5e4; position: relative; height: 100%; min-height: 50px; z-index: 1; }
 
     /* TAMPON PATTE */
-    .paw-stamp {
-        position: absolute; top: 4px; right: 4px; font-size: 2.5rem; width: 50px; height: 50px;
-        display: flex; align-items: center; justify-content: center; color: #fb7185; opacity: 0.4; 
-        transform: rotate(15deg); z-index: 1; 
-        pointer-events: none; 
-    }
+    .paw-stamp { position: absolute; top: 4px; right: 4px; font-size: 2.5rem; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; color: #fb7185; opacity: 0.4; transform: rotate(15deg); z-index: 1; pointer-events: none; }
 
     /* HACHURES PROVISOIRES */
-    .provisional {
-        background-image: repeating-linear-gradient(
-            45deg,
-            rgba(255, 255, 255, 0.4) 0,
-            rgba(255, 255, 255, 0.4) 5px, 
-            transparent 5px,
-            transparent 10px 
-        );
-        background-size: 10px 10px; 
-        opacity: 1 !important; 
-    }
+    .provisional { background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0.4) 5px, transparent 5px, transparent 10px); background-size: 10px 10px; opacity: 1 !important; }
 
-    /* SWITCH GENDER (Tri-State) */
-    .gender-select {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-radius: 8px;
-        border: 1px solid #e7e5e4;
-        background-color: #fff;
-        overflow: hidden;
-        margin-top: 10px;
-        width: 100%;
-        max-width: 240px;
-    }
-    .gender-btn {
-        flex: 1;
-        padding: 8px 0;
-        text-align: center;
-        font-weight: bold;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border-right: 1px solid #e7e5e4;
-    }
+    /* SWITCH GENDER */
+    .gender-select { display: flex; justify-content: space-between; align-items: center; border-radius: 8px; border: 1px solid #e7e5e4; background-color: #fff; overflow: hidden; margin-top: 10px; width: 100%; max-width: 240px; }
+    .gender-btn { flex: 1; padding: 8px 0; text-align: center; font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; border-right: 1px solid #e7e5e4; }
     .gender-btn:last-child { border-right: none; }
     .gender-btn.active-M { background-color: #60a5fa; color: white; }
     .gender-btn.active-F { background-color: #f472b6; color: white; }
     .gender-btn.active-U { background-color: #d6d3d1; color: #44403c; }
 
-
     .stats-dots-container { position: absolute; bottom: 8rem; left: 0; width: 100%; display: flex; justify-content: center; gap: 0.5rem; pointer-events: none; z-index: 50; }
     .stats-dot { width: 10px; height: 10px; border-radius: 50%; transition: all 0.3s; border: 1px solid #d6d3d1; }
     .stats-dot.active { background-color: #fb7185; border-color: #fb7185; width: 12px; height: 12px; }
     .stats-dot.inactive { background-color: #e7e5e4; }
-
     .month-picker-trigger { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 50; cursor: pointer; }
-    
-    /* SPLASH SCREEN */
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
     .splash-fade { animation: fadeOut 0.5s ease-out forwards; }
-
-    /* Bouton d'édition sur la modal de réservation */
-    .edit-toggle-button {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 10;
-        transition: all 0.2s;
-    }
     
-    /* FIX pour les modales en plein écran */
-    .dog-picker-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 75; 
-        background-color: #fafaf9; 
-        display: flex;
-        flex-direction: column;
-    }
+    /* STYLES MODALES Z-INDEX */
+    .overlay-base { position: fixed; inset: 0; display: flex; justify-content: center; items-end; sm:items-center; backdrop-filter: blur(4px); }
+    .modal-reservation { z-index: 60; background-color: rgba(28, 25, 23, 0.5); }
+    .modal-picker { z-index: 100; background-color: #fafaf9; } /* Picker au dessus */
+    .modal-history { z-index: 80; background-color: rgba(28, 25, 23, 0.5); }
 </style>
 </head>
 <body>
@@ -144,7 +86,6 @@ const firebaseConfig = {
 try {
     const app = initializeApp(firebaseConfig);
     window.db = getFirestore(app);
-    // AJOUT DE query, where, limit, orderBy pour l'historique
     window.fire = { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy, getFirestore }; 
 } catch(e) { console.error(e); alert("Erreur Config Firebase"); }
 </script>
@@ -152,19 +93,9 @@ try {
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-// --- CONSTANTES ET UTILITAIRES ---
-
 const COLORS = ['#fecaca', '#fed7aa', '#fef08a', '#bbf7d0', '#a5f3fc', '#bfdbfe', '#ddd6fe', '#f5d0fe', '#e7e5e4', '#cbd5e1', '#fecdd3', '#a7f3d0'];
-
-// Palettes de Couleurs Claires (Light Tones)
-const COLORS_MALE = [
-    '#bfdbfe', '#93c5fd', '#60a5fa', '#38bdf8', '#0ea5e9',
-    '#e0f2fe', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9'
-];
-const COLORS_FEMALE = [
-    '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777',
-    '#ffe4e6', '#fecdd3', '#fda4af', '#fb7185', '#f43f5e'
-];
+const COLORS_MALE = ['#bfdbfe', '#93c5fd', '#60a5fa', '#38bdf8', '#0ea5e9', '#e0f2fe', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9'];
+const COLORS_FEMALE = ['#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777', '#ffe4e6', '#fecdd3', '#fda4af', '#fb7185', '#f43f5e'];
 const COLOR_UNKNOWN = '#a8a29e';
 
 const S = {
@@ -179,21 +110,19 @@ const S = {
     monthBtn: "w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-100 rounded-full transition-colors active:scale-90",
     daysHeader: "flex w-full border-b border-stone-100 bg-stone-50 shrink-0 z-10 relative h-8 items-center",
     dayHeaderCell: "flex-1 text-center text-[10px] font-bold text-stone-400 py-2 uppercase tracking-wider",
-    overlay: "fixed inset-0 z-[60] bg-stone-900/50 flex justify-center items-end sm:items-center backdrop-blur-sm",
     modal: "bg-white w-full h-[95vh] rounded-t-3xl flex flex-col overflow-hidden shadow-2xl max-w-md mx-auto",
     modalHead: "flex justify-between items-center p-4 border-b bg-stone-50 relative",
     input: "w-full border border-stone-200 rounded-xl p-3 mt-1 bg-white focus:ring-2 focus:ring-rose-200 outline-none text-stone-600",
     label: "text-xs font-bold text-stone-400 uppercase mt-3 block tracking-wide",
     btn: "bg-rose-400 text-white font-bold py-3 rounded-xl w-full shadow-lg shadow-rose-100 mt-4 active:scale-[0.98] transition-transform",
-    statCard: "bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex flex-col justify-center",
-    statTitle: "text-stone-400 text-xs uppercase font-bold tracking-widest",
     card: "bg-white p-3 rounded-xl shadow-sm mb-2 flex items-center gap-4 border border-stone-100 active:scale-[0.99] transition-transform cursor-pointer",
     avatar: "w-10 h-10 rounded-full object-cover border border-stone-200 bg-stone-100 flex items-center justify-center text-stone-400 font-bold",
     avatarLarge: "w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-stone-100 flex items-center justify-center text-stone-400 text-3xl font-bold",
     rangeOverlay: "fixed inset-0 z-[70] bg-stone-900/50 flex items-center justify-center backdrop-blur-md",
     rangeBox: "bg-white w-10/12 max-w-xs rounded-3xl p-3 shadow-2xl",
     rangeGrid: "grid grid-cols-7 gap-1 p-1",
-    rangeCell: "aspect-square flex items-center justify-center rounded-full text-xs font-bold relative transition-all cursor-pointer"
+    rangeCell: "aspect-square flex items-center justify-center rounded-full text-xs font-bold relative transition-all cursor-pointer",
+    statTitle: "text-stone-400 text-xs uppercase font-bold tracking-widest",
 };
 
 const getGenderColor = (gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_UNKNOWN) => {
@@ -205,31 +134,6 @@ const getGenderColor = (gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_U
     return palette[dogsOfSameGender.length % palette.length];
 };
 
-// --- COMPOSANTS UI DE BASE (DÉFINIS AVANT APP) ---
-
-const EditButtonComponent = ({ onClick }) => (
-    <button onClick={onClick} className="w-8 h-8 bg-white rounded-full text-rose-400 shadow-md hover:bg-rose-50 transition"><i className="fas fa-pencil-alt text-sm"></i></button>
-);
-
-const GenderSwitchComponent = ({ form, setForm, isEditing }) => {
-    const currentGender = form.gender || 'U';
-    return (
-        <div className="flex items-center gap-4 mt-3">
-            <label className={S.label}>Genre</label>
-            <div className="gender-select">
-                <div className={`gender-btn ${currentGender === 'M' ? 'active-M' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'M'})}>Mâle ♂</div>
-                <div className={`gender-btn ${currentGender === 'U' ? 'active-U' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'U'})}>Inconnu</div>
-                <div className={`gender-btn ${currentGender === 'F' ? 'active-F' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'F'})}>Femelle ♀</div>
-            </div>
-        </div>
-    );
-};
-
-const OpenDirectoryButton = ({ onOpen, isEditing }) => (
-    <button onClick={onOpen} className="w-10 h-10 bg-rose-50 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-100 transition-colors active:scale-95" title="Ouvrir le Carnet" disabled={!isEditing}><i className="fas fa-address-book"></i></button>
-);
-
-// --- FONCTION MAIL GLOBALE ---
 const sendMail = (action, data, oldData = null) => {
     const emails = "a.lorillon@gmail.com,g.lorillon16@gmail.com";
     const subject = encodeURIComponent(`[4Pattes] ${action} : ${data.dogName}`);
@@ -246,7 +150,22 @@ const sendMail = (action, data, oldData = null) => {
     setTimeout(() => { window.location.href = link; }, 500);
 };
 
-// --- COMPOSANTS COMPLEXES (DÉFINIS AVANT APP) ---
+const EditButtonComponent = ({ onClick }) => ( <button onClick={onClick} className="w-8 h-8 bg-white rounded-full text-rose-400 shadow-md hover:bg-rose-50 transition flex items-center justify-center"><i className="fas fa-pencil-alt text-sm"></i></button> );
+
+const GenderSwitchComponent = ({ form, setForm, isEditing }) => {
+    const currentGender = form.gender || 'U';
+    return (
+        <div className="flex items-center gap-4 mt-3"><label className={S.label}>Genre</label>
+            <div className="gender-select">
+                <div className={`gender-btn ${currentGender === 'M' ? 'active-M' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'M'})}>Mâle ♂</div>
+                <div className={`gender-btn ${currentGender === 'U' ? 'active-U' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'U'})}>Inconnu</div>
+                <div className={`gender-btn ${currentGender === 'F' ? 'active-F' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'F'})}>Femelle ♀</div>
+            </div>
+        </div>
+    );
+};
+
+const OpenDirectoryButton = ({ onOpen, isEditing }) => ( <button onClick={onOpen} className="w-10 h-10 bg-rose-50 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-100 transition-colors active:scale-95" title="Ouvrir le Carnet" disabled={!isEditing}><i className="fas fa-address-book"></i></button> );
 
 const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
     if (!item) return null;
@@ -265,30 +184,14 @@ const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
         return String(value);
     };
     const isRestorable = actionType !== 'RESTAURATION';
-
     return (
-        <div className={S.overlay} style={{zIndex: 80}}>
+        <div className="overlay-base modal-history">
             <div className={S.modal} style={{maxHeight: '90vh'}}>
                 <div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail de l'Action</h3><button onClick={onClose} className="text-stone-500 font-bold">✕</button></div>
                 <div className="flex-1 overflow-y-auto p-4">
-                    <div className="bg-stone-100 p-3 rounded-xl mb-4">
-                        <p className="font-bold">{item.action} sur {item.collection.toUpperCase()}</p>
-                        <p className="text-sm text-stone-700">Chien: {restoredData.dogName || 'Inconnu'}</p>
-                        <p className="text-xs text-stone-500">ID: {item.docId}</p>
-                        <p className="text-xs text-stone-500">Date: {item.timestamp.toLocaleString()}</p>
-                    </div>
-                    {isRestorable && (
-                        <button onClick={() => onRestore(item)} className="w-full bg-rose-400 text-white font-bold py-2 rounded-lg mb-4 hover:bg-rose-500 transition-colors"><i className={`fas ${actionType === 'CRÉATION' ? 'fa-undo' : 'fa-trash-restore'}`}></i> {actionType === 'CRÉATION' ? 'Annuler la Création' : 'Restaurer Version'}</button>
-                    )}
-                    <table className="w-full text-sm text-left table-fixed">
-                        <thead><tr className="text-xs text-stone-400 uppercase bg-stone-50"><th className="w-1/4 px-2 py-2">Champ</th><th className="w-1/2 px-2 py-2">{actionType === 'MODIFICATION' ? 'Avant' : actionType === 'SUPPRESSION' ? 'Supprimé' : 'Créé'}</th><th className="w-1/4 px-2 py-2 text-right">Actuel</th></tr></thead>
-                        <tbody>{keys.map(key => {
-                            if (key.startsWith('__') || key === 'id' || key === 'docId' || key === 'timestamp' || key === 'collection') return null;
-                            let restoredValue = restoredData[key];
-                            let currentValue = currentData ? currentData[key] : null;
-                            return (<tr key={key} className="border-b border-stone-100"><td className="px-2 py-1 font-bold text-stone-600">{key}</td><td className="px-2 py-1 text-stone-700 break-words">{renderValue(key, restoredData, false)}</td><td className="px-2 py-1 text-right break-words">{(actionType !== 'SUPPRESSION' && currentData) ? (<span className="text-stone-500">{renderValue(key, currentData, true)}</span>) : (<span className="text-red-500">N/A</span>)}</td></tr>);
-                        })}</tbody>
-                    </table>
+                    <div className="bg-stone-100 p-3 rounded-xl mb-4"><p className="font-bold">{item.action} sur {item.collection.toUpperCase()}</p><p className="text-sm text-stone-700">Chien: {restoredData.dogName || 'Inconnu'}</p><p className="text-xs text-stone-500">ID: {item.docId}</p><p className="text-xs text-stone-500">Date: {item.timestamp.toLocaleString()}</p></div>
+                    {isRestorable && ( <button onClick={() => onRestore(item)} className="w-full bg-rose-400 text-white font-bold py-2 rounded-lg mb-4 hover:bg-rose-500 transition-colors"><i className={`fas ${actionType === 'CRÉATION' ? 'fa-undo' : 'fa-trash-restore'}`}></i> {actionType === 'CRÉATION' ? 'Annuler la Création' : 'Restaurer Version'}</button> )}
+                    <table className="w-full text-sm text-left table-fixed"><thead><tr className="text-xs text-stone-400 uppercase bg-stone-50"><th className="w-1/4 px-2 py-2">Champ</th><th className="w-1/2 px-2 py-2">{actionType === 'MODIFICATION' ? 'Avant' : actionType === 'SUPPRESSION' ? 'Supprimé' : 'Créé'}</th><th className="w-1/4 px-2 py-2 text-right">Actuel</th></tr></thead><tbody>{keys.map(key => { if (key.startsWith('__') || key === 'id' || key === 'docId' || key === 'timestamp' || key === 'collection') return null; let restoredValue = restoredData[key]; let currentValue = currentData ? currentData[key] : null; return (<tr key={key} className="border-b border-stone-100"><td className="px-2 py-1 font-bold text-stone-600">{key}</td><td className="px-2 py-1 text-stone-700 break-words">{renderValue(key, restoredData, false)}</td><td className="px-2 py-1 text-right break-words">{(actionType !== 'SUPPRESSION' && currentData) ? (<span className="text-stone-500">{renderValue(key, currentData, true)}</span>) : (<span className="text-red-500">N/A</span>)}</td></tr>); })}</tbody></table>
                 </div>
             </div>
         </div>
@@ -296,32 +199,11 @@ const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
 };
 
 const HistoryPage = ({ history, setHistoryDetail, onRestore }) => {
-    const getActionClass = (action) => {
-        if (action === 'CRÉATION' || action === 'RESTAURATION') return 'text-emerald-500 bg-emerald-50 border-emerald-200';
-        if (action === 'MODIFICATION') return 'text-blue-500 bg-blue-50 border-blue-200';
-        if (action === 'SUPPRESSION') return 'text-red-500 bg-red-50 border-red-200';
-        return 'text-stone-500 bg-stone-50 border-stone-200';
-    };
+    const getActionClass = (action) => { if (action === 'CRÉATION' || action === 'RESTAURATION') return 'text-emerald-500 bg-emerald-50 border-emerald-200'; if (action === 'MODIFICATION') return 'text-blue-500 bg-blue-50 border-blue-200'; if (action === 'SUPPRESSION') return 'text-red-500 bg-red-50 border-red-200'; return 'text-stone-500 bg-stone-50 border-stone-200'; };
     return (
         <div className="scroll-view p-4 bg-stone-50">
             <h2 className="text-2xl font-serif font-bold text-stone-700 mb-4">Historique (7 Jours)</h2>
-            {history.length === 0 ? <p className="text-stone-500 italic mt-8">Aucune action récente.</p> : history.map((item) => {
-                const isDeletion = item.action === 'SUPPRESSION';
-                const isCreation = item.action === 'CRÉATION';
-                let dogName = 'N/A'; try { dogName = JSON.parse(item.data).dogName || 'Inconnu'; } catch {}
-                return (
-                    <div key={item.id} className={`bg-white p-4 rounded-xl shadow-sm mb-3 border ${getActionClass(item.action)} flex justify-between items-center cursor-pointer`} onClick={() => setHistoryDetail(item)}>
-                        <div><div className={`font-bold text-sm ${getActionClass(item.action)}`}>{item.action} - {item.collection.toUpperCase()}</div><div className="text-stone-700">{dogName}</div><div className="text-stone-500 text-xs mt-1">{item.timestamp.toLocaleString('fr-FR')}</div></div>
-                        <div className="flex gap-2">
-                             {(isDeletion || isCreation || item.action === 'MODIFICATION') && (
-                                <button onClick={(e) => { e.stopPropagation(); onRestore(item); }} className="bg-white text-rose-400 p-2 rounded-full shadow-md text-sm hover:bg-stone-100 transition-colors">
-                                    <i className={`fas ${isDeletion ? 'fa-trash-restore' : 'fa-undo'}`}></i>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                );
-            })}
+            {history.length === 0 ? <p className="text-stone-500 italic mt-8">Aucune action récente.</p> : history.map((item) => { const isDeletion = item.action === 'SUPPRESSION'; const isCreation = item.action === 'CRÉATION'; let dogName = 'N/A'; try { dogName = JSON.parse(item.data).dogName || 'Inconnu'; } catch {} return ( <div key={item.id} className={`bg-white p-4 rounded-xl shadow-sm mb-3 border ${getActionClass(item.action)} flex justify-between items-center cursor-pointer`} onClick={() => setHistoryDetail(item)}><div><div className={`font-bold text-sm ${getActionClass(item.action)}`}>{item.action} - {item.collection.toUpperCase()}</div><div className="text-stone-700">{dogName}</div><div className="text-stone-500 text-xs mt-1">{item.timestamp.toLocaleString('fr-FR')}</div></div><div className="flex gap-2">{(isDeletion || isCreation || item.action === 'MODIFICATION') && (<button onClick={(e) => { e.stopPropagation(); onRestore(item); }} className="bg-white text-rose-400 p-2 rounded-full shadow-md text-sm hover:bg-stone-100 transition-colors"><i className={`fas ${isDeletion ? 'fa-trash-restore' : 'fa-undo'}`}></i></button>)}</div></div> ); })}
         </div>
     );
 };
@@ -331,17 +213,12 @@ const DogPickerModal = ({ isOpen, onClose, onSelect, dogs }) => {
     const [filter, setFilter] = useState('');
     let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))).sort((a,b) => a.name.localeCompare(b.name));
     return (
-        <div className={`${S.overlay} dog-picker-modal`}> 
+        <div className="overlay-base modal-picker"> 
             <div className="flex flex-col h-full w-full max-w-md bg-stone-50 rounded-lg shadow-2xl">
                 <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-30"><h3 className="font-bold text-lg text-stone-700">Sélectionner un Chien</h3><button onClick={onClose} className="text-stone-500 font-bold">✕</button></div>
                 <div className="p-4 pb-0 bg-stone-50 sticky top-0 z-20"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Rechercher..." className="w-full p-3 rounded-xl border border-stone-200 shadow-sm text-stone-600 outline-none placeholder-stone-300" /></div>
                 <div className="flex-1 overflow-y-auto p-4 pb-16">
-                    {filteredDogs.map(d => (
-                        <div key={d.id} onClick={() => onSelect(d)} className={S.card} style={{borderColor: d.color, borderLeftWidth: '5px'}}>
-                            {d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}
-                            <div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div>
-                        </div>
-                    ))}
+                    {filteredDogs.map(d => ( <div key={d.id} onClick={() => onSelect(d)} className={S.card} style={{borderColor: d.color, borderLeftWidth: '5px'}}>{d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div></div> ))}
                     {filteredDogs.length === 0 && <p className="text-center text-stone-400 mt-8">Aucun chien trouvé.</p>}
                 </div>
             </div>
@@ -353,137 +230,55 @@ const RangePickerModal = ({ isRangeOpen, setIsRangeOpen, rangeSel, setRangeSel, 
     if (!isRangeOpen) return null;
     const daysInMonth = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth() + 1, 0).getDate();
     const startOffset = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), 1).getDay() || 7;
-    
     return (
         <div className={S.rangeOverlay}>
             <div className={S.rangeBox}>
-                <div className="flex justify-between items-center mb-2 px-2">
-                    <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()-1)))} className="p-1"><i className="fas fa-chevron-left text-xs"></i></button>
-                    <span className="font-bold text-sm capitalize text-stone-700 font-serif">{pickerViewDate.toLocaleString('fr-FR', {month:'long', year:'numeric'})}</span>
-                    <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()+1)))} className="p-1"><i className="fas fa-chevron-right text-xs"></i></button>
-                </div>
-                <div className="grid grid-cols-7 text-center text-[10px] font-bold text-stone-300 mb-1">
-                    {['L','M','Me','J','V','S','D'].map((d, i) => <div key={i}>{d}</div>)}
-                </div>
-                <div className="grid grid-cols-7 gap-1 p-1">
-                    {Array.from({length: startOffset-1}).map((_,i) => <div key={`empty-${i}`}></div>)}
-                    {Array.from({length: daysInMonth}).map((_, i) => {
-                        const d = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), i+1);
-                        const isStart = rangeSel.start && d.toDateString() === rangeSel.start.toDateString();
-                        const isEnd = rangeSel.end && d.toDateString() === rangeSel.end.toDateString();
-                        const isIn = rangeSel.start && rangeSel.end && d > rangeSel.start && d < rangeSel.end;
-                        return (
-                            <div key={i} onClick={() => handleRangeClick(d)} 
-                                    className={`${S.rangeCell} ${isStart || isEnd ? 'bg-rose-400 text-white shadow-lg scale-110 z-10' : isIn ? 'bg-rose-50 text-rose-400' : 'bg-stone-50 text-stone-600'}`}>
-                                {i+1}
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="text-center mt-2">
-                    <button onClick={() => setIsRangeOpen(false)} className="text-stone-400 font-bold text-xs">Fermer</button>
-                </div>
+                <div className="flex justify-between items-center mb-2 px-2"><button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()-1)))} className="p-1"><i className="fas fa-chevron-left text-xs"></i></button><span className="font-bold text-sm capitalize text-stone-700 font-serif">{pickerViewDate.toLocaleString('fr-FR', {month:'long', year:'numeric'})}</span><button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()+1)))} className="p-1"><i className="fas fa-chevron-right text-xs"></i></button></div>
+                <div className="grid grid-cols-7 text-center text-[10px] font-bold text-stone-300 mb-1">{['L','M','Me','J','V','S','D'].map((d, i) => <div key={i}>{d}</div>)}</div>
+                <div className="grid grid-cols-7 gap-1 p-1">{Array.from({length: startOffset-1}).map((_,i) => <div key={`empty-${i}`}></div>)}{Array.from({length: daysInMonth}).map((_, i) => { const d = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), i+1); const isStart = rangeSel.start && d.toDateString() === rangeSel.start.toDateString(); const isEnd = rangeSel.end && d.toDateString() === rangeSel.end.toDateString(); const isIn = rangeSel.start && rangeSel.end && d > rangeSel.start && d < rangeSel.end; return ( <div key={i} onClick={() => handleRangeClick(d)} className={`${S.rangeCell} ${isStart || isEnd ? 'bg-rose-400 text-white shadow-lg scale-110 z-10' : isIn ? 'bg-rose-50 text-rose-400' : 'bg-stone-50 text-stone-600'}`}>{i+1}</div> ); })}</div>
+                <div className="text-center mt-2"><button onClick={() => setIsRangeOpen(false)} className="text-stone-400 font-bold text-xs">Fermer</button></div>
             </div>
         </div>
     );
 };
 
 const Calendar = ({ date, setDate, openForm, bookings }) => {
-    const y = date.getFullYear(), m = date.getMonth();
-    const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1));
-    let weeks = [], curr = new Date(start);
-    for(let w=0; w<6; w++) {
-        let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); }
-        if(w>4 && days[0].getMonth() !== m) break;
-        const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999);
-        const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
-        const items = evts.map(ev => {
-            const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1;
-            let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6;
-            return { ...ev, dur, st, en };
-        });
-        const placed = []; const rows = [];
-        items.forEach(ev => { let rowIdx = 0; while(true) { if(!rows[rowIdx]) rows[rowIdx] = Array(7).fill(false); let fit = true; for(let i=ev.st; i<=ev.en; i++) if(rows[rowIdx][i]) fit=false; if(fit) { for(let i=ev.st; i<=ev.en; i++) rows[rowIdx][i] = true; placed.push({...ev, row: rowIdx}); break; } rowIdx++; } });
-        weeks.push({days, items: placed});
+    const y = date.getFullYear(), m = date.getMonth(); const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1)); let weeks = [], curr = new Date(start);
+    for(let w=0; w<6; w++) { let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); } if(w>4 && days[0].getMonth() !== m) break; const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999); const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
+        const items = evts.map(ev => { const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1; let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6; return { ...ev, dur, st, en }; });
+        const placed = []; const rows = []; items.forEach(ev => { let rowIdx = 0; while(true) { if(!rows[rowIdx]) rows[rowIdx] = Array(7).fill(false); let fit = true; for(let i=ev.st; i<=ev.en; i++) if(rows[rowIdx][i]) fit=false; if(fit) { for(let i=ev.st; i<=ev.en; i++) rows[rowIdx][i] = true; placed.push({...ev, row: rowIdx}); break; } rowIdx++; } }); weeks.push({days, items: placed});
     }
     return (
-        <div className="flex flex-col h-full overflow-hidden">
-            <div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div>
-            <div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>
-                {weeks.map((w,i) => (
-                    <div key={i} className="calendar-week" style={{flex:1}}>
-                        {w.days.map((d,j) => {
-                            const isToday = d.toDateString() === new Date().toDateString();
-                            return <div key={j} className={`calendar-day`} onClick={()=>openForm('new',{date:d.toISOString().split('T')[0]})}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>;
-                        })}
-                        {w.items.map(ev => (
-                            <div key={ev.id} className={`absolute h-4 rounded-md text-[9px] text-stone-700 font-bold px-1 overflow-hidden z-10 border border-white/50 cursor-pointer shadow-sm flex items-center gap-1 ${ev.isProvisional ? 'provisional' : ''}`} style={{backgroundColor:ev.color, left:`${ev.st*14.28}%`, width:`${(ev.en-ev.st+1)*14.28}%`, top:`${25 + ev.row*16}px`, opacity: ev.isProvisional ? 1 : 0.8}} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}>
-                                {ev.paymentStatus === 'appointment' ? <><span className="truncate">{ev.dogName}</span><i className="fas fa-calendar-check text-[9px] ml-1 shrink-0"></i></> : <>{ev.paymentStatus==='pending' && <div className="w-2 h-2 rounded-full bg-red-500 border border-white shrink-0"></div>}{ev.paymentStatus==='deposit' && <div className="w-2 h-2 rounded-full bg-orange-400 border border-white shrink-0"></div>}<span className="truncate">{ev.dogName} <span className="opacity-75 text-[9px]">({ev.dur}j)</span></span></>}
-                            </div>
-                        ))}
-                    </div>
-                ))}
-                <div style={{height:'140px'}}></div>
-            </div>
-            <div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div>
-        </div>
+        <div className="flex flex-col h-full overflow-hidden"><div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div><div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>{weeks.map((w,i) => (<div key={i} className="calendar-week" style={{flex:1}}>{w.days.map((d,j) => { const isToday = d.toDateString() === new Date().toDateString(); return <div key={j} className={`calendar-day`} onClick={()=>openForm('new',{date:d.toISOString().split('T')[0]})}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>; })}{w.items.map(ev => (<div key={ev.id} className={`absolute h-4 rounded-md text-[9px] text-stone-700 font-bold px-1 overflow-hidden z-10 border border-white/50 cursor-pointer shadow-sm flex items-center gap-1 ${ev.isProvisional ? 'provisional' : ''}`} style={{backgroundColor:ev.color, left:`${ev.st*14.28}%`, width:`${(ev.en-ev.st+1)*14.28}%`, top:`${25 + ev.row*16}px`, opacity: ev.isProvisional ? 1 : 0.8}} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}>{ev.paymentStatus === 'appointment' ? <><span className="truncate">{ev.dogName}</span><i className="fas fa-calendar-check text-[9px] ml-1 shrink-0"></i></> : <>{ev.paymentStatus==='pending' && <div className="w-2 h-2 rounded-full bg-red-500 border border-white shrink-0"></div>}{ev.paymentStatus==='deposit' && <div className="w-2 h-2 rounded-full bg-orange-400 border border-white shrink-0"></div>}<span className="truncate">{ev.dogName} <span className="opacity-75 text-[9px]">({ev.dur}j)</span></span></>}</div>))}</div>))}<div style={{height:'140px'}}></div></div><div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div></div>
     );
 };
 
 const Stats = ({ dogs, bookings }) => {
-    const chartRef = useRef(null);
-    const [statsYear, setStatsYear] = useState(new Date().getFullYear());
-    const [showTable, setShowTable] = useState(false);
-    const getFinancials = () => {
-        let globalTotal = 0; let yearTotal = 0; const monthlyData = Array(12).fill(0);
-        bookings.forEach(b => { const price = Number(b.price || 0); if(price === 0) return; const start = new Date(b.start); start.setHours(12); const end = new Date(b.end); end.setHours(12); const nbDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1); const pricePerDay = price / nbDays; globalTotal += price; let current = new Date(start); for(let i=0; i<nbDays; i++){ if(current.getFullYear()===statsYear) { monthlyData[current.getMonth()]+=pricePerDay; yearTotal+=pricePerDay; } current.setDate(current.getDate()+1); } }); 
-        return { globalTotal, yearTotal, monthlyData: monthlyData.map(val => Math.round(val)) };
-    };
+    const chartRef = useRef(null); const [statsYear, setStatsYear] = useState(new Date().getFullYear()); const [showTable, setShowTable] = useState(false);
+    const getFinancials = () => { let globalTotal = 0; let yearTotal = 0; const monthlyData = Array(12).fill(0); bookings.forEach(b => { const price = Number(b.price || 0); if(price === 0) return; const start = new Date(b.start); start.setHours(12); const end = new Date(b.end); end.setHours(12); const nbDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1); const pricePerDay = price / nbDays; globalTotal += price; let current = new Date(start); for(let i=0; i<nbDays; i++){ if(current.getFullYear()===statsYear) { monthlyData[current.getMonth()]+=pricePerDay; yearTotal+=pricePerDay; } current.setDate(current.getDate()+1); } }); return { globalTotal, yearTotal, monthlyData: monthlyData.map(val => Math.round(val)) }; };
     const { globalTotal: gTotal, yearTotal: yrTotal, monthlyData } = getFinancials();
     const getDogStats = () => { const stats = {}; bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; const price = Number(b.price || 0); if (!isNaN(price)) { stats[n] = (stats[n]||0) + price; } }); return Object.entries(stats).map(([name, val]) => ({name, val})).sort((a,b) => b.val - a.val); };
     const dogStats = getDogStats();
     const [activeSnap, setActiveSnap] = useState(0);
 
     useEffect(() => {
-        if(document.getElementById('cBar')) {
-            if(window.bC) window.bC.destroy(); 
-            window.bC = new Chart(document.getElementById('cBar'), {
-                type:'bar', data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'], datasets:[{label:'CA', data:monthlyData, backgroundColor:'#fb7185', borderRadius:4}]}, 
-                options:{
-                    plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}},
-                    animation: { onComplete: () => { if (window.bC && window.bC.ctx) { const ctx = window.bC.ctx; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; window.bC.data.datasets.forEach(function(dataset) { for (let i = 0; i < dataset.data.length; i++) { const meta = window.bC.getDatasetMeta(0); if (meta && meta.data[i]) { const model = meta.data[i]; const value = monthlyData[i] > 0 ? monthlyData[i] + '€' : ''; ctx.fillText(value, model.x, model.y - 5); } } }); } } }
-                }
-            });
-        }
-        if(document.getElementById('cPie')) {
-             const dRev={}; const sRev={}; bookings.forEach(b => { const price = Number(b.price || 0); if (!isNaN(price)) { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; dRev[n]=(dRev[n]||0)+price; sRev[b.source||"Autre"]=(sRev[b.source||"Autre"]||0)+price; } });
-             const dogLabels = Object.entries(dRev).sort(([, a], [, b]) => b - a).map(([name]) => name); const dogData = Object.entries(dRev).sort(([, a], [, b]) => b - a).map(([, val]) => val);
-             const sourceLabels = Object.entries(sRev).sort(([, a], [, b]) => b - a).map(([name]) => name); const sourceData = Object.entries(sRev).sort(([, a], [, b]) => b - a).map(([, val]) => val);
-             if(window.pC) window.pC.destroy(); window.pC = new Chart(document.getElementById('cPie'), {type:'doughnut', data:{labels:dogLabels, datasets:[{data:dogData, backgroundColor:COLORS}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
-             if(window.sC) window.sC.destroy(); window.sC = new Chart(document.getElementById('cSource'), {type:'doughnut', data:{labels:sourceLabels, datasets:[{data:sourceData, backgroundColor:COLORS.slice().reverse()}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
-        }
+        if(document.getElementById('cBar')) { if(window.bC) window.bC.destroy(); window.bC = new Chart(document.getElementById('cBar'), { type:'bar', data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'], datasets:[{label:'CA', data:monthlyData, backgroundColor:'#fb7185', borderRadius:4}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, animation: { onComplete: () => { if (window.bC && window.bC.ctx) { const ctx = window.bC.ctx; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; window.bC.data.datasets.forEach(function(dataset) { for (let i = 0; i < dataset.data.length; i++) { const meta = window.bC.getDatasetMeta(0); if (meta && meta.data[i]) { const model = meta.data[i]; const value = monthlyData[i] > 0 ? monthlyData[i] + '€' : ''; ctx.fillText(value, model.x, model.y - 5); } } }); } } } } }); }
+        if(document.getElementById('cPie')) { const dRev={}; const sRev={}; bookings.forEach(b => { const price = Number(b.price || 0); if (!isNaN(price)) { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; dRev[n]=(dRev[n]||0)+price; sRev[b.source||"Autre"]=(sRev[b.source||"Autre"]||0)+price; } }); const dogLabels = Object.entries(dRev).sort(([, a], [, b]) => b - a).map(([name]) => name); const dogData = Object.entries(dRev).sort(([, a], [, b]) => b - a).map(([, val]) => val); const sourceLabels = Object.entries(sRev).sort(([, a], [, b]) => b - a).map(([name]) => name); const sourceData = Object.entries(sRev).sort(([, a], [, b]) => b - a).map(([, val]) => val); if(window.pC) window.pC.destroy(); window.pC = new Chart(document.getElementById('cPie'), {type:'doughnut', data:{labels:dogLabels, datasets:[{data:dogData, backgroundColor:COLORS}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}}); if(window.sC) window.sC.destroy(); window.sC = new Chart(document.getElementById('cSource'), {type:'doughnut', data:{labels:sourceLabels, datasets:[{data:sourceData, backgroundColor:COLORS.slice().reverse()}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}}); }
     }, [statsYear, bookings, dogs, showTable]);
     const handleScroll = (e) => { setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth)); };
-    const exportData = () => { /* Export */ };
+    const exportData = () => {};
 
     return (
         <>
-            <div className="snap-container" onScroll={(e)=>setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth))}>
-                <div className="snap-page"><div className="bg-white p-6 rounded-3xl shadow-sm mb-4 border border-stone-100"><div className={S.statTitle}>CA Global</div><div className="text-4xl font-serif font-bold text-stone-700 mt-2">{Math.round(gTotal)} €</div></div><div className="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex-1 min-h-[300px] flex flex-col"><div className="flex justify-between items-center mb-2"><button onClick={()=>setStatsYear(statsYear-1)}>◀</button><div className="text-center"><div className={S.statTitle}>CA {statsYear}</div><div className="text-xl font-bold text-rose-400">{Math.round(yrTotal)} €</div></div><button onClick={()=>setStatsYear(statsYear+1)}>▶</button></div><div className="flex-1 relative min-h-0"><canvas id="cBar" ref={chartRef}></canvas></div></div><button onClick={exportData} className="w-full bg-stone-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-20"><i className="fas fa-file-csv"></i> Export CSV</button></div>
-                <div className="snap-page"><div className="flex flex-col h-full"><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400 flex items-center gap-2 z-20 w-full">PAR CHIEN <button onClick={()=>setShowTable(true)} className="ml-auto mr-8 bg-stone-100 px-3 py-1 rounded-full text-stone-600 hover:bg-stone-200 border border-stone-200 shadow-sm pointer-events-auto"><i className="fas fa-list"></i></button></div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cPie"></canvas></div></div><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400">PAR SOURCE</div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cSource"></canvas></div></div></div></div>
-            </div>
-            <div className="stats-dots-container"><div className={`stats-dot ${activeSnap===0 ? 'active' : 'inactive'}`}></div><div className={`stats-dot ${activeSnap===1 ? 'active' : 'inactive'}`}></div></div>
-            {showTable && <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail par Chien</h3><button onClick={()=>setShowTable(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4"><table className="w-full text-sm text-left text-stone-600"><thead className="text-xs text-stone-400 uppercase bg-stone-50"><tr><th className="px-4 py-2">Nom</th><th className="px-4 py-2 text-right">CA Total</th></tr></thead><tbody>{dogStats.map((d, i) => <tr key={i} className="border-b border-stone-100"><td className="px-4 py-3 font-bold">{d.name}</td><td className="px-4 py-3 text-right text-rose-400 font-bold">{Math.round(d.val)} €</td></tr>)}</tbody></table></div></div></div>}
+            <div className="snap-container" onScroll={(e)=>setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth))}><div className="snap-page"><div className="bg-white p-6 rounded-3xl shadow-sm mb-4 border border-stone-100"><div className={S.statTitle}>CA Global</div><div className="text-4xl font-serif font-bold text-stone-700 mt-2">{Math.round(gTotal)} €</div></div><div className="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex-1 min-h-[300px] flex flex-col"><div className="flex justify-between items-center mb-2"><button onClick={()=>setStatsYear(statsYear-1)}>◀</button><div className="text-center"><div className={S.statTitle}>CA {statsYear}</div><div className="text-xl font-bold text-rose-400">{Math.round(yrTotal)} €</div></div><button onClick={()=>setStatsYear(statsYear+1)}>▶</button></div><div className="flex-1 relative min-h-0"><canvas id="cBar" ref={chartRef}></canvas></div></div><button onClick={exportData} className="w-full bg-stone-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-20"><i className="fas fa-file-csv"></i> Export CSV</button></div><div className="snap-page"><div className="flex flex-col h-full"><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400 flex items-center gap-2 z-20 w-full">PAR CHIEN <button onClick={()=>setShowTable(true)} className="ml-auto mr-8 bg-stone-100 px-3 py-1 rounded-full text-stone-600 hover:bg-stone-200 border border-stone-200 shadow-sm pointer-events-auto"><i className="fas fa-list"></i></button></div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cPie"></canvas></div></div><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400">PAR SOURCE</div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cSource"></canvas></div></div></div></div></div><div className="stats-dots-container"><div className={`stats-dot ${activeSnap===0 ? 'active' : 'inactive'}`}></div><div className={`stats-dot ${activeSnap===1 ? 'active' : 'inactive'}`}></div></div>{showTable && <div className="overlay-base modal-history"><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail par Chien</h3><button onClick={()=>setShowTable(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4"><table className="w-full text-sm text-left text-stone-600"><thead className="text-xs text-stone-400 uppercase bg-stone-50"><tr><th className="px-4 py-2">Nom</th><th className="px-4 py-2 text-right">CA Total</th></tr></thead><tbody>{dogStats.map((d, i) => <tr key={i} className="border-b border-stone-100"><td className="px-4 py-3 font-bold">{d.name}</td><td className="px-4 py-3 text-right text-rose-400 font-bold">{Math.round(d.val)} €</td></tr>)}</tbody></table></div></div></div>}
         </>
     );
 };
 
 const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selectedDog }) => {
-    const [filter, setFilter] = useState('');
-    const [directoryMode, setDirectoryMode] = useState('relevance');
-    
-    let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase())));
-    let dogsUpcoming = [];
+    const [filter, setFilter] = useState(''); const [directoryMode, setDirectoryMode] = useState('relevance');
+    let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))); let dogsUpcoming = [];
+    const openDetail = (d) => { setSelectedDog(d); window.history.pushState({ modal: true }, ''); };
 
     if (filter === '' && directoryMode === 'relevance') {
         const today = new Date(); today.setHours(0,0,0,0); const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -521,7 +316,6 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
     );
 };
 
-// --- APP COMPONENT ---
 function App() {
     const [splash, setSplash] = useState(true);
     const [view, setView] = useState('calendar');
@@ -541,7 +335,6 @@ function App() {
     const [rangeSel, setRangeSel] = useState({ start: null, end: null });
 
     const [showTable, setShowTable] = useState(false);
-    
     const [isEditing, setIsEditing] = useState(false); 
     const [isDogPickerOpen, setIsDogPickerOpen] = useState(false); 
     const [historyDetail, setHistoryDetail] = useState(null); 
@@ -616,15 +409,15 @@ function App() {
             
             {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
             
-            {/* 🐶 MODAL PICKER DU CARNET */}
+            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) */}
             <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
             
-            {/* 📋 MODAL DE DÉTAIL HISTORIQUE */}
+            {/* 📋 MODAL DE DÉTAIL HISTORIQUE (Z-INDEX 80) */}
             <HistoryDetailModal item={historyDetail} onClose={() => setHistoryDetail(null)} onRestore={restoreData} dogs={dogs} bookings={bookings} />
 
             
             {modal && (
-                <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}>
+                <div className="overlay-base modal-reservation"><div className={S.modal}><div className={S.modalHead}>
                     
                     {/* BOUTON ÉDITION DÉPLACÉ AU CENTRE GAUCHE */}
                     {editId && !isDogMode && !isEditing && (
@@ -736,7 +529,7 @@ function App() {
 
                 </div></div>
             )}
-            {fullImg && <div className={S.overlay} onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
+            {fullImg && <div className="overlay-base z-[120]" onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
         </div>
     );
 }
