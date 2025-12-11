@@ -49,6 +49,19 @@
         pointer-events: none; 
     }
 
+    /* HACHURES PROVISOIRES */
+    .provisional {
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.4) 0,
+            rgba(255, 255, 255, 0.4) 5px, 
+            transparent 5px,
+            transparent 10px 
+        );
+        background-size: 10px 10px; 
+        opacity: 1 !important; 
+    }
+
     /* SWITCH GENDER (Tri-State) */
     .gender-select {
         display: flex;
@@ -73,7 +86,7 @@
         border-right: 1px solid #e7e5e4;
     }
     .gender-btn:last-child { border-right: none; }
-    .gender-btn.active-M { background-color: #3b82f6; color: white; }
+    .gender-btn.active-M { background-color: #60a5fa; color: white; }
     .gender-btn.active-F { background-color: #f472b6; color: white; }
     .gender-btn.active-U { background-color: #d6d3d1; color: #44403c; }
 
@@ -88,6 +101,26 @@
     /* SPLASH SCREEN */
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
     .splash-fade { animation: fadeOut 0.5s ease-out forwards; }
+
+    /* Bouton d'édition sur la modal de réservation */
+    .edit-toggle-button {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        transition: all 0.2s;
+    }
+    
+    /* FIX pour les modales en plein écran */
+    .dog-picker-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 75; 
+        background-color: #fafaf9; 
+        display: flex;
+        flex-direction: column;
+    }
 </style>
 </head>
 <body>
@@ -95,7 +128,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // ⬇️ --- VOS CLÉS FIREBASE ICI --- ⬇️
 const firebaseConfig = {
@@ -111,23 +144,28 @@ const firebaseConfig = {
 try {
     const app = initializeApp(firebaseConfig);
     window.db = getFirestore(app);
-    window.fire = { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot };
+    // AJOUT DE query, where, limit, orderBy pour l'historique
+    window.fire = { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy, getFirestore }; 
 } catch(e) { console.error(e); alert("Erreur Config Firebase"); }
 </script>
 
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-// Palettes de Couleurs Douces (10 nuances pour chaque)
+// --- CONSTANTES ET UTILITAIRES ---
+
+const COLORS = ['#fecaca', '#fed7aa', '#fef08a', '#bbf7d0', '#a5f3fc', '#bfdbfe', '#ddd6fe', '#f5d0fe', '#e7e5e4', '#cbd5e1', '#fecdd3', '#a7f3d0'];
+
+// Palettes de Couleurs Claires (Light Tones)
 const COLORS_MALE = [
-    '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8', 
-    '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'
+    '#bfdbfe', '#93c5fd', '#60a5fa', '#38bdf8', '#0ea5e9',
+    '#e0f2fe', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9'
 ];
 const COLORS_FEMALE = [
-    '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777', 
-    '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777'
+    '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777',
+    '#ffe4e6', '#fecdd3', '#fda4af', '#fb7185', '#f43f5e'
 ];
-const COLOR_UNKNOWN = '#a8a29e'; // Gris Doux
+const COLOR_UNKNOWN = '#a8a29e';
 
 const S = {
     nav: "fixed bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-stone-200 h-16 z-50 flex justify-between px-6 pb-safe",
@@ -136,39 +174,360 @@ const S = {
     inactive: "text-stone-300",
     fabPos: "absolute left-1/2 -translate-x-1/2 -top-6",
     fab: "bg-rose-400 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl border-4 border-white active:scale-90 transition-transform cursor-pointer",
-    
     monthNav: "fixed bottom-20 w-full bg-white/95 backdrop-blur-sm border-t border-stone-100 h-14 z-40 flex justify-center items-center gap-8 shadow-sm",
     monthTitle: "text-lg font-serif font-bold text-stone-700 capitalize relative", 
     monthBtn: "w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-100 rounded-full transition-colors active:scale-90",
-
     daysHeader: "flex w-full border-b border-stone-100 bg-stone-50 shrink-0 z-10 relative h-8 items-center",
     dayHeaderCell: "flex-1 text-center text-[10px] font-bold text-stone-400 py-2 uppercase tracking-wider",
-    
     overlay: "fixed inset-0 z-[60] bg-stone-900/50 flex justify-center items-end sm:items-center backdrop-blur-sm",
     modal: "bg-white w-full h-[95vh] rounded-t-3xl flex flex-col overflow-hidden shadow-2xl max-w-md mx-auto",
-    modalHead: "flex justify-between items-center p-4 border-b bg-stone-50",
+    modalHead: "flex justify-between items-center p-4 border-b bg-stone-50 relative",
     input: "w-full border border-stone-200 rounded-xl p-3 mt-1 bg-white focus:ring-2 focus:ring-rose-200 outline-none text-stone-600",
     label: "text-xs font-bold text-stone-400 uppercase mt-3 block tracking-wide",
     btn: "bg-rose-400 text-white font-bold py-3 rounded-xl w-full shadow-lg shadow-rose-100 mt-4 active:scale-[0.98] transition-transform",
-    
     statCard: "bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex flex-col justify-center",
     statTitle: "text-stone-400 text-xs uppercase font-bold tracking-widest",
-    
     card: "bg-white p-3 rounded-xl shadow-sm mb-2 flex items-center gap-4 border border-stone-100 active:scale-[0.99] transition-transform cursor-pointer",
     avatar: "w-10 h-10 rounded-full object-cover border border-stone-200 bg-stone-100 flex items-center justify-center text-stone-400 font-bold",
     avatarLarge: "w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-stone-100 flex items-center justify-center text-stone-400 text-3xl font-bold",
-    
     rangeOverlay: "fixed inset-0 z-[70] bg-stone-900/50 flex items-center justify-center backdrop-blur-md",
     rangeBox: "bg-white w-10/12 max-w-xs rounded-3xl p-3 shadow-2xl",
     rangeGrid: "grid grid-cols-7 gap-1 p-1",
     rangeCell: "aspect-square flex items-center justify-center rounded-full text-xs font-bold relative transition-all cursor-pointer"
 };
 
+const getGenderColor = (gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_UNKNOWN) => {
+    if (gender === 'U') return COLOR_UNKNOWN;
+    const palette = gender === 'F' ? COLORS_FEMALE : COLORS_MALE;
+    const existingDog = dogs.find(d => d.id === dogId && d.gender === gender);
+    if (existingDog && existingDog.color) return existingDog.color;
+    const dogsOfSameGender = dogs.filter(d => d.gender === gender);
+    return palette[dogsOfSameGender.length % palette.length];
+};
+
+// --- COMPOSANTS UI DE BASE (DÉFINIS AVANT APP) ---
+
+const EditButtonComponent = ({ onClick }) => (
+    <button onClick={onClick} className="w-8 h-8 bg-white rounded-full text-rose-400 shadow-md hover:bg-rose-50 transition"><i className="fas fa-pencil-alt text-sm"></i></button>
+);
+
+const GenderSwitchComponent = ({ form, setForm, isEditing }) => {
+    const currentGender = form.gender || 'U';
+    return (
+        <div className="flex items-center gap-4 mt-3">
+            <label className={S.label}>Genre</label>
+            <div className="gender-select">
+                <div className={`gender-btn ${currentGender === 'M' ? 'active-M' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'M'})}>Mâle ♂</div>
+                <div className={`gender-btn ${currentGender === 'U' ? 'active-U' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'U'})}>Inconnu</div>
+                <div className={`gender-btn ${currentGender === 'F' ? 'active-F' : ''}`} onClick={() => isEditing && setForm({...form, gender: 'F'})}>Femelle ♀</div>
+            </div>
+        </div>
+    );
+};
+
+const OpenDirectoryButton = ({ onOpen, isEditing }) => (
+    <button onClick={onOpen} className="w-10 h-10 bg-rose-50 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-100 transition-colors active:scale-95" title="Ouvrir le Carnet" disabled={!isEditing}><i className="fas fa-address-book"></i></button>
+);
+
+// --- FONCTION MAIL GLOBALE ---
+const sendMail = (action, data, oldData = null) => {
+    const emails = "a.lorillon@gmail.com,g.lorillon16@gmail.com";
+    const subject = encodeURIComponent(`[4Pattes] ${action} : ${data.dogName}`);
+    let body = `🐶 ${action} - ${data.dogName}\n\n`;
+    if (data.isAllDay) { body += `📅 NOUVEAU : Du ${new Date(data.start).toLocaleDateString()} Au ${new Date(data.end).toLocaleDateString()}\n`; } else { body += `📅 NOUVEAU : Du ${new Date(data.start).toLocaleString()} Au ${new Date(data.end).toLocaleString()}\n`; }
+    body += `⏰ Journée entière : ${data.isAllDay ? 'Oui' : 'Non (' + data.startTime + ' - ' + data.endTime + ')'}\n`;
+    if (oldData) {
+        body += `\n--- Anciennes Données ---\n`;
+        if (oldData.isAllDay) { body += `📅 ANCIEN : Du ${new Date(oldData.start).toLocaleDateString()} Au ${new Date(oldData.end).toLocaleDateString()}\n`; } else { body += `📅 ANCIEN : Du ${new Date(oldData.start).toLocaleString()} Au ${new Date(oldData.end).toLocaleString()}\n`; }
+        body += `⏰ ANCIENNE JOURNÉE ENTIÈRE : ${oldData.isAllDay ? 'Oui' : 'Non (' + oldData.startTime + ' - ' + oldData.endTime + ')'}\n`;
+    }
+    body += `\n💰 Prix : ${data.price || 0} €\n`; body += `📝 Notes : ${data.notes || "Aucune"}\n`; body += `Propriétaire : ${data.ownerName || "Inconnu"}\n`; body += `Tél : ${data.phone || ""}`;
+    const link = `mailto:${emails}?subject=${subject}&body=${encodeURIComponent(body)}`;
+    setTimeout(() => { window.location.href = link; }, 500);
+};
+
+// --- COMPOSANTS COMPLEXES (DÉFINIS AVANT APP) ---
+
+const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
+    if (!item) return null;
+    const parseData = (dataStr) => { try { return JSON.parse(dataStr); } catch { return {}; } };
+    const restoredData = parseData(item.data);
+    const actionType = item.action;
+    const currentData = item.collection === 'dogs' ? dogs.find(d => d.id === item.docId) : bookings.find(b => b.id === item.docId);
+    const keys = Array.from(new Set([...Object.keys(restoredData), ...(currentData ? Object.keys(currentData) : [])]));
+    const renderValue = (key, data, isCurrent) => {
+        let value = data[key];
+        if (key === 'photo') return value ? (value === "Base64 (omitted)" ? 'Image (Omise)' : 'Image (Présente)') : 'N/A';
+        if (key === 'start' || key === 'end') return value ? new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
+        if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+        if (key === 'deposit' || key === 'price') return value ? `${value} €` : '0 €';
+        if (currentData && !isCurrent && actionType === 'MODIFICATION') { const currentValue = currentData[key]; if (String(value) !== String(currentValue)) return <span className="text-red-500 font-bold">{String(value)}</span>; }
+        return String(value);
+    };
+    const isRestorable = actionType !== 'RESTAURATION';
+
+    return (
+        <div className={S.overlay} style={{zIndex: 80}}>
+            <div className={S.modal} style={{maxHeight: '90vh'}}>
+                <div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail de l'Action</h3><button onClick={onClose} className="text-stone-500 font-bold">✕</button></div>
+                <div className="flex-1 overflow-y-auto p-4">
+                    <div className="bg-stone-100 p-3 rounded-xl mb-4">
+                        <p className="font-bold">{item.action} sur {item.collection.toUpperCase()}</p>
+                        <p className="text-sm text-stone-700">Chien: {restoredData.dogName || 'Inconnu'}</p>
+                        <p className="text-xs text-stone-500">ID: {item.docId}</p>
+                        <p className="text-xs text-stone-500">Date: {item.timestamp.toLocaleString()}</p>
+                    </div>
+                    {isRestorable && (
+                        <button onClick={() => onRestore(item)} className="w-full bg-rose-400 text-white font-bold py-2 rounded-lg mb-4 hover:bg-rose-500 transition-colors"><i className={`fas ${actionType === 'CRÉATION' ? 'fa-undo' : 'fa-trash-restore'}`}></i> {actionType === 'CRÉATION' ? 'Annuler la Création' : 'Restaurer Version'}</button>
+                    )}
+                    <table className="w-full text-sm text-left table-fixed">
+                        <thead><tr className="text-xs text-stone-400 uppercase bg-stone-50"><th className="w-1/4 px-2 py-2">Champ</th><th className="w-1/2 px-2 py-2">{actionType === 'MODIFICATION' ? 'Avant' : actionType === 'SUPPRESSION' ? 'Supprimé' : 'Créé'}</th><th className="w-1/4 px-2 py-2 text-right">Actuel</th></tr></thead>
+                        <tbody>{keys.map(key => {
+                            if (key.startsWith('__') || key === 'id' || key === 'docId' || key === 'timestamp' || key === 'collection') return null;
+                            let restoredValue = restoredData[key];
+                            let currentValue = currentData ? currentData[key] : null;
+                            return (<tr key={key} className="border-b border-stone-100"><td className="px-2 py-1 font-bold text-stone-600">{key}</td><td className="px-2 py-1 text-stone-700 break-words">{renderValue(key, restoredData, false)}</td><td className="px-2 py-1 text-right break-words">{(actionType !== 'SUPPRESSION' && currentData) ? (<span className="text-stone-500">{renderValue(key, currentData, true)}</span>) : (<span className="text-red-500">N/A</span>)}</td></tr>);
+                        })}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const HistoryPage = ({ history, setHistoryDetail, onRestore }) => {
+    const getActionClass = (action) => {
+        if (action === 'CRÉATION' || action === 'RESTAURATION') return 'text-emerald-500 bg-emerald-50 border-emerald-200';
+        if (action === 'MODIFICATION') return 'text-blue-500 bg-blue-50 border-blue-200';
+        if (action === 'SUPPRESSION') return 'text-red-500 bg-red-50 border-red-200';
+        return 'text-stone-500 bg-stone-50 border-stone-200';
+    };
+    return (
+        <div className="scroll-view p-4 bg-stone-50">
+            <h2 className="text-2xl font-serif font-bold text-stone-700 mb-4">Historique (7 Jours)</h2>
+            {history.length === 0 ? <p className="text-stone-500 italic mt-8">Aucune action récente.</p> : history.map((item) => {
+                const isDeletion = item.action === 'SUPPRESSION';
+                const isCreation = item.action === 'CRÉATION';
+                let dogName = 'N/A'; try { dogName = JSON.parse(item.data).dogName || 'Inconnu'; } catch {}
+                return (
+                    <div key={item.id} className={`bg-white p-4 rounded-xl shadow-sm mb-3 border ${getActionClass(item.action)} flex justify-between items-center cursor-pointer`} onClick={() => setHistoryDetail(item)}>
+                        <div><div className={`font-bold text-sm ${getActionClass(item.action)}`}>{item.action} - {item.collection.toUpperCase()}</div><div className="text-stone-700">{dogName}</div><div className="text-stone-500 text-xs mt-1">{item.timestamp.toLocaleString('fr-FR')}</div></div>
+                        <div className="flex gap-2">
+                             {(isDeletion || isCreation || item.action === 'MODIFICATION') && (
+                                <button onClick={(e) => { e.stopPropagation(); onRestore(item); }} className="bg-white text-rose-400 p-2 rounded-full shadow-md text-sm hover:bg-stone-100 transition-colors">
+                                    <i className={`fas ${isDeletion ? 'fa-trash-restore' : 'fa-undo'}`}></i>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+const DogPickerModal = ({ isOpen, onClose, onSelect, dogs }) => {
+    if (!isOpen) return null;
+    const [filter, setFilter] = useState('');
+    let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))).sort((a,b) => a.name.localeCompare(b.name));
+    return (
+        <div className={`${S.overlay} dog-picker-modal`}> 
+            <div className="flex flex-col h-full w-full max-w-md bg-stone-50 rounded-lg shadow-2xl">
+                <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-30"><h3 className="font-bold text-lg text-stone-700">Sélectionner un Chien</h3><button onClick={onClose} className="text-stone-500 font-bold">✕</button></div>
+                <div className="p-4 pb-0 bg-stone-50 sticky top-0 z-20"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Rechercher..." className="w-full p-3 rounded-xl border border-stone-200 shadow-sm text-stone-600 outline-none placeholder-stone-300" /></div>
+                <div className="flex-1 overflow-y-auto p-4 pb-16">
+                    {filteredDogs.map(d => (
+                        <div key={d.id} onClick={() => onSelect(d)} className={S.card} style={{borderColor: d.color, borderLeftWidth: '5px'}}>
+                            {d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}
+                            <div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div>
+                        </div>
+                    ))}
+                    {filteredDogs.length === 0 && <p className="text-center text-stone-400 mt-8">Aucun chien trouvé.</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const RangePickerModal = ({ isRangeOpen, setIsRangeOpen, rangeSel, setRangeSel, pickerViewDate, setPickerViewDate, handleRangeClick }) => {
+    if (!isRangeOpen) return null;
+    const daysInMonth = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth() + 1, 0).getDate();
+    const startOffset = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), 1).getDay() || 7;
+    
+    return (
+        <div className={S.rangeOverlay}>
+            <div className={S.rangeBox}>
+                <div className="flex justify-between items-center mb-2 px-2">
+                    <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()-1)))} className="p-1"><i className="fas fa-chevron-left text-xs"></i></button>
+                    <span className="font-bold text-sm capitalize text-stone-700 font-serif">{pickerViewDate.toLocaleString('fr-FR', {month:'long', year:'numeric'})}</span>
+                    <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()+1)))} className="p-1"><i className="fas fa-chevron-right text-xs"></i></button>
+                </div>
+                <div className="grid grid-cols-7 text-center text-[10px] font-bold text-stone-300 mb-1">
+                    {['L','M','Me','J','V','S','D'].map((d, i) => <div key={i}>{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-1 p-1">
+                    {Array.from({length: startOffset-1}).map((_,i) => <div key={`empty-${i}`}></div>)}
+                    {Array.from({length: daysInMonth}).map((_, i) => {
+                        const d = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), i+1);
+                        const isStart = rangeSel.start && d.toDateString() === rangeSel.start.toDateString();
+                        const isEnd = rangeSel.end && d.toDateString() === rangeSel.end.toDateString();
+                        const isIn = rangeSel.start && rangeSel.end && d > rangeSel.start && d < rangeSel.end;
+                        return (
+                            <div key={i} onClick={() => handleRangeClick(d)} 
+                                    className={`${S.rangeCell} ${isStart || isEnd ? 'bg-rose-400 text-white shadow-lg scale-110 z-10' : isIn ? 'bg-rose-50 text-rose-400' : 'bg-stone-50 text-stone-600'}`}>
+                                {i+1}
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="text-center mt-2">
+                    <button onClick={() => setIsRangeOpen(false)} className="text-stone-400 font-bold text-xs">Fermer</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const Calendar = ({ date, setDate, openForm, bookings }) => {
+    const y = date.getFullYear(), m = date.getMonth();
+    const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1));
+    let weeks = [], curr = new Date(start);
+    for(let w=0; w<6; w++) {
+        let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); }
+        if(w>4 && days[0].getMonth() !== m) break;
+        const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999);
+        const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
+        const items = evts.map(ev => {
+            const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1;
+            let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6;
+            return { ...ev, dur, st, en };
+        });
+        const placed = []; const rows = [];
+        items.forEach(ev => { let rowIdx = 0; while(true) { if(!rows[rowIdx]) rows[rowIdx] = Array(7).fill(false); let fit = true; for(let i=ev.st; i<=ev.en; i++) if(rows[rowIdx][i]) fit=false; if(fit) { for(let i=ev.st; i<=ev.en; i++) rows[rowIdx][i] = true; placed.push({...ev, row: rowIdx}); break; } rowIdx++; } });
+        weeks.push({days, items: placed});
+    }
+    return (
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div>
+            <div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>
+                {weeks.map((w,i) => (
+                    <div key={i} className="calendar-week" style={{flex:1}}>
+                        {w.days.map((d,j) => {
+                            const isToday = d.toDateString() === new Date().toDateString();
+                            return <div key={j} className={`calendar-day`} onClick={()=>openForm('new',{date:d.toISOString().split('T')[0]})}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>;
+                        })}
+                        {w.items.map(ev => (
+                            <div key={ev.id} className={`absolute h-4 rounded-md text-[9px] text-stone-700 font-bold px-1 overflow-hidden z-10 border border-white/50 cursor-pointer shadow-sm flex items-center gap-1 ${ev.isProvisional ? 'provisional' : ''}`} style={{backgroundColor:ev.color, left:`${ev.st*14.28}%`, width:`${(ev.en-ev.st+1)*14.28}%`, top:`${25 + ev.row*16}px`, opacity: ev.isProvisional ? 1 : 0.8}} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}>
+                                {ev.paymentStatus === 'appointment' ? <><span className="truncate">{ev.dogName}</span><i className="fas fa-calendar-check text-[9px] ml-1 shrink-0"></i></> : <>{ev.paymentStatus==='pending' && <div className="w-2 h-2 rounded-full bg-red-500 border border-white shrink-0"></div>}{ev.paymentStatus==='deposit' && <div className="w-2 h-2 rounded-full bg-orange-400 border border-white shrink-0"></div>}<span className="truncate">{ev.dogName} <span className="opacity-75 text-[9px]">({ev.dur}j)</span></span></>}
+                            </div>
+                        ))}
+                    </div>
+                ))}
+                <div style={{height:'140px'}}></div>
+            </div>
+            <div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div>
+        </div>
+    );
+};
+
+const Stats = ({ dogs, bookings }) => {
+    const chartRef = useRef(null);
+    const [statsYear, setStatsYear] = useState(new Date().getFullYear());
+    const [showTable, setShowTable] = useState(false);
+    const getFinancials = () => {
+        let globalTotal = 0; let yearTotal = 0; const monthlyData = Array(12).fill(0);
+        bookings.forEach(b => { const price = Number(b.price || 0); if(price === 0) return; const start = new Date(b.start); start.setHours(12); const end = new Date(b.end); end.setHours(12); const nbDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1); const pricePerDay = price / nbDays; globalTotal += price; let current = new Date(start); for(let i=0; i<nbDays; i++){ if(current.getFullYear()===statsYear) { monthlyData[current.getMonth()]+=pricePerDay; yearTotal+=pricePerDay; } current.setDate(current.getDate()+1); } }); 
+        return { globalTotal, yearTotal, monthlyData: monthlyData.map(val => Math.round(val)) };
+    };
+    const { globalTotal: gTotal, yearTotal: yrTotal, monthlyData } = getFinancials();
+    const getDogStats = () => { const stats = {}; bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; const price = Number(b.price || 0); if (!isNaN(price)) { stats[n] = (stats[n]||0) + price; } }); return Object.entries(stats).map(([name, val]) => ({name, val})).sort((a,b) => b.val - a.val); };
+    const dogStats = getDogStats();
+    const [activeSnap, setActiveSnap] = useState(0);
+
+    useEffect(() => {
+        if(document.getElementById('cBar')) {
+            if(window.bC) window.bC.destroy(); 
+            window.bC = new Chart(document.getElementById('cBar'), {
+                type:'bar', data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'], datasets:[{label:'CA', data:monthlyData, backgroundColor:'#fb7185', borderRadius:4}]}, 
+                options:{
+                    plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}},
+                    animation: { onComplete: () => { if (window.bC && window.bC.ctx) { const ctx = window.bC.ctx; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; window.bC.data.datasets.forEach(function(dataset) { for (let i = 0; i < dataset.data.length; i++) { const meta = window.bC.getDatasetMeta(0); if (meta && meta.data[i]) { const model = meta.data[i]; const value = monthlyData[i] > 0 ? monthlyData[i] + '€' : ''; ctx.fillText(value, model.x, model.y - 5); } } }); } } }
+                }
+            });
+        }
+        if(document.getElementById('cPie')) {
+             const dRev={}; const sRev={}; bookings.forEach(b => { const price = Number(b.price || 0); if (!isNaN(price)) { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; dRev[n]=(dRev[n]||0)+price; sRev[b.source||"Autre"]=(sRev[b.source||"Autre"]||0)+price; } });
+             const dogLabels = Object.entries(dRev).sort(([, a], [, b]) => b - a).map(([name]) => name); const dogData = Object.entries(dRev).sort(([, a], [, b]) => b - a).map(([, val]) => val);
+             const sourceLabels = Object.entries(sRev).sort(([, a], [, b]) => b - a).map(([name]) => name); const sourceData = Object.entries(sRev).sort(([, a], [, b]) => b - a).map(([, val]) => val);
+             if(window.pC) window.pC.destroy(); window.pC = new Chart(document.getElementById('cPie'), {type:'doughnut', data:{labels:dogLabels, datasets:[{data:dogData, backgroundColor:COLORS}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
+             if(window.sC) window.sC.destroy(); window.sC = new Chart(document.getElementById('cSource'), {type:'doughnut', data:{labels:sourceLabels, datasets:[{data:sourceData, backgroundColor:COLORS.slice().reverse()}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
+        }
+    }, [statsYear, bookings, dogs, showTable]);
+    const handleScroll = (e) => { setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth)); };
+    const exportData = () => { /* Export */ };
+
+    return (
+        <>
+            <div className="snap-container" onScroll={(e)=>setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth))}>
+                <div className="snap-page"><div className="bg-white p-6 rounded-3xl shadow-sm mb-4 border border-stone-100"><div className={S.statTitle}>CA Global</div><div className="text-4xl font-serif font-bold text-stone-700 mt-2">{Math.round(gTotal)} €</div></div><div className="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex-1 min-h-[300px] flex flex-col"><div className="flex justify-between items-center mb-2"><button onClick={()=>setStatsYear(statsYear-1)}>◀</button><div className="text-center"><div className={S.statTitle}>CA {statsYear}</div><div className="text-xl font-bold text-rose-400">{Math.round(yrTotal)} €</div></div><button onClick={()=>setStatsYear(statsYear+1)}>▶</button></div><div className="flex-1 relative min-h-0"><canvas id="cBar" ref={chartRef}></canvas></div></div><button onClick={exportData} className="w-full bg-stone-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-20"><i className="fas fa-file-csv"></i> Export CSV</button></div>
+                <div className="snap-page"><div className="flex flex-col h-full"><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400 flex items-center gap-2 z-20 w-full">PAR CHIEN <button onClick={()=>setShowTable(true)} className="ml-auto mr-8 bg-stone-100 px-3 py-1 rounded-full text-stone-600 hover:bg-stone-200 border border-stone-200 shadow-sm pointer-events-auto"><i className="fas fa-list"></i></button></div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cPie"></canvas></div></div><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400">PAR SOURCE</div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cSource"></canvas></div></div></div></div>
+            </div>
+            <div className="stats-dots-container"><div className={`stats-dot ${activeSnap===0 ? 'active' : 'inactive'}`}></div><div className={`stats-dot ${activeSnap===1 ? 'active' : 'inactive'}`}></div></div>
+            {showTable && <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail par Chien</h3><button onClick={()=>setShowTable(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4"><table className="w-full text-sm text-left text-stone-600"><thead className="text-xs text-stone-400 uppercase bg-stone-50"><tr><th className="px-4 py-2">Nom</th><th className="px-4 py-2 text-right">CA Total</th></tr></thead><tbody>{dogStats.map((d, i) => <tr key={i} className="border-b border-stone-100"><td className="px-4 py-3 font-bold">{d.name}</td><td className="px-4 py-3 text-right text-rose-400 font-bold">{Math.round(d.val)} €</td></tr>)}</tbody></table></div></div></div>}
+        </>
+    );
+};
+
+const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selectedDog }) => {
+    const [filter, setFilter] = useState('');
+    const [directoryMode, setDirectoryMode] = useState('relevance');
+    
+    let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase())));
+    let dogsUpcoming = [];
+
+    if (filter === '' && directoryMode === 'relevance') {
+        const today = new Date(); today.setHours(0,0,0,0); const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        const dogsToday = filteredDogs.filter(d => { const todayEnd = new Date(tomorrow); const activeBooking = bookings.find(b => { const bStart = new Date(b.start); const bEnd = new Date(b.end); return b.dogId === d.id && bStart < todayEnd && bEnd >= today; }); return !!activeBooking; }).sort((a, b) => a.name.localeCompare(b.name));
+        dogsUpcoming = filteredDogs.filter(d => !dogsToday.some(td => td.id === d.id)).map(d => { const upcomingBooking = bookings.filter(b => b.dogId === d.id && new Date(b.start) >= tomorrow).sort((a, b) => new Date(a.start) - new Date(b.start))[0]; return { ...d, nextArrival: upcomingBooking ? new Date(upcomingBooking.start) : null }; }).filter(d => d.nextArrival).sort((a, b) => b.nextArrival ? (a.nextArrival - b.nextArrival) : -1);
+        const dogsOther = filteredDogs.filter(d => !dogsToday.some(td => td.id === d.id) && !dogsUpcoming.some(ud => ud.id === d.id)).sort((a,b) => a.name.localeCompare(b.name));
+        const grouped = {}; if (dogsToday.length > 0) grouped['En Garde Aujourd\'hui'] = dogsToday; if (dogsUpcoming.length > 0) grouped['Prochaines Arrivées'] = dogsUpcoming; if (dogsOther.length > 0) grouped['Autres Chiens'] = dogsOther;
+        filteredDogs = Object.entries(grouped).flatMap(([label, list]) => [{ type: 'header', label }, ...list]);
+    } else if (directoryMode === 'alphabetical') {
+        const grouped = filteredDogs.sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {});
+        filteredDogs = Object.entries(grouped).flatMap(([letter, list]) => [{ type: 'header', label: letter, isAlpha: true }, ...list]);
+    }
+    
+    if (selectedDog) {
+        const dogBookings = bookings.filter(b => b.dogId === selectedDog.id).sort((a,b) => new Date(b.start) - new Date(a.start));
+        return ( 
+            <div className="scroll-view p-4 bg-stone-50">
+                <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-30 mb-6 rounded-3xl shadow-sm"><div className="absolute left-4 top-1/2 transform -translate-y-1/2"><EditButtonComponent onClick={() => openForm('dog', selectedDog)} /></div><h3 className="font-bold text-lg text-stone-700 mx-auto">Fiche Chien</h3><button onClick={()=>setSelectedDog(null)} className="text-stone-500 font-bold">✕</button></div>
+                <div className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center mb-4">{selectedDog.photo ? <img src={selectedDog.photo} className={S.avatarLarge + " cursor-pointer"} /> : <div className={S.avatarLarge} style={{background:selectedDog.color, color:'#fff'}}>{selectedDog.name[0]}</div>}<h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">{selectedDog.name}</h2><p className="text-stone-500 font-medium italic">{selectedDog.breed}</p><p className="text-stone-400">{selectedDog.owner}</p><div className="flex gap-4 mt-4"><a href={`tel:${selectedDog.phone}`} className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-xl"><i className="fas fa-phone"></i></a><a href={`sms:${selectedDog.phone}`} className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xl"><i className="fas fa-message"></i></a><a href={`https://wa.me/${selectedDog.phone}`} className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl"><i className="fab fa-whatsapp"></i></a></div><div className="mt-6 w-full bg-stone-50 p-4 rounded-xl text-sm italic text-stone-600 border border-stone-100">{selectedDog.notes || "Aucune note."}</div><button onClick={()=>{openForm('new'); pickDog(selectedDog);}} className={S.btn}>Nouvelle Garde</button></div><h3 className="text-stone-400 text-xs uppercase font-bold tracking-widest mb-2">Historique</h3>{dogBookings.map(h => (<div key={h.id} className="bg-white p-4 rounded-xl mb-2 flex justify-between shadow-sm border border-stone-100 cursor-pointer" onClick={() => openForm('edit', h)}><span className="text-stone-600 font-medium">Du {new Date(h.start).toLocaleDateString()} au {new Date(h.end).toLocaleDateString()}</span><span className="font-bold text-rose-400">{h.price} €</span></div>))}
+            </div> 
+        );
+    }
+    
+    return ( 
+        <div className="flex h-full bg-stone-50">
+            <div className="flex-1 overflow-y-auto p-4 pb-32 no-scrollbar scroll-smooth">
+                <div className="sticky top-0 bg-stone-50 z-20 pt-1 pb-4"><div className="flex justify-between items-center mb-4"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Rechercher..." className="flex-1 p-3 rounded-xl border border-stone-200 shadow-sm text-stone-600 outline-none placeholder-stone-300" /></div><div className="flex justify-center items-center text-xs font-bold text-stone-500 bg-white rounded-xl shadow-sm border border-stone-200"><button onClick={() => {setDirectoryMode('relevance'); setFilter('');}} className={`flex-1 py-2 rounded-l-xl transition-colors ${directoryMode === 'relevance' ? 'bg-rose-400 text-white' : 'hover:bg-stone-100'}`}>Pertinence</button><button onClick={() => {setDirectoryMode('alphabetical'); setFilter('');}} className={`flex-1 py-2 rounded-r-xl transition-colors ${directoryMode === 'alphabetical' ? 'bg-rose-400 text-white' : 'hover:bg-stone-100'}`}>Alphabétique</button></div></div>
+                {filteredDogs.map((item, index) => {
+                    if (item.type === 'header') { const currentDogsUpcoming = dogsUpcoming.filter(d => d.id); return (<div key={item.label} className="text-xs font-bold text-rose-400 mb-2 pl-2 mt-4 sticky top-28 bg-stone-50 z-10">{item.label} {item.label === 'Prochaines Arrivées' && currentDogsUpcoming.length > 0 && currentDogsUpcoming[0].nextArrival && (<span className="text-stone-400 font-normal ml-2 text-[10px]">(Prochaine le {currentDogsUpcoming[0].nextArrival.toLocaleDateString()})</span>)}</div>); } 
+                    else { return ( <div key={item.id} onClick={() => openDetail(item)} className={S.card} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{item.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> ); }
+                })}
+            </div>
+            {directoryMode === 'alphabetical' && !filter && (<div className="absolute right-1 top-20 bottom-32 w-6 flex flex-col justify-center items-center z-40 text-[10px] font-bold text-rose-400 bg-white/50 rounded-full">{Object.keys(dogs.sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {})).map(l => <div key={l} className="flex-1 w-full flex items-center justify-center" onClick={()=>{document.getElementById(`letter-${l}`).scrollIntoView({behavior:'auto'})}}>{l}</div>)}</div>)}
+        </div> 
+    );
+};
+
+// --- APP COMPONENT ---
 function App() {
     const [splash, setSplash] = useState(true);
     const [view, setView] = useState('calendar');
     const [bookings, setBookings] = useState([]);
     const [dogs, setDogs] = useState([]);
+    const [history, setHistory] = useState([]); 
     const [date, setDate] = new useState(new Date());
     
     const [modal, setModal] = useState(false);
@@ -182,503 +541,200 @@ function App() {
     const [rangeSel, setRangeSel] = useState({ start: null, end: null });
 
     const [showTable, setShowTable] = useState(false);
+    
+    const [isEditing, setIsEditing] = useState(false); 
+    const [isDogPickerOpen, setIsDogPickerOpen] = useState(false); 
+    const [historyDetail, setHistoryDetail] = useState(null); 
 
-    const defForm = { 
-        dogId:'', dogName:'', breed:'', ownerName:'', phone:'', 
-        start:'', end:'', price:'', notes:'', photo:null, source:'',
-        paymentStatus:'pending', deposit:'',
-        isAllDay: true, startTime: '09:00', endTime: '18:00',
-        gender: 'U' // CHANGEMENT: Défaut 'U' (Inconnu)
-    };
+    const defForm = { dogId:'', dogName:'', breed:'', ownerName:'', phone:'', start:'', end:'', price:'', notes:'', photo:null, source:'', paymentStatus:'pending', deposit:'', isAllDay: true, startTime: '09:00', endTime: '18:00', gender: 'U', isProvisional: false };
     const [form, setForm] = useState(defForm);
-    const [statsYear, setStatsYear] = useState(new Date().getFullYear());
 
-    // --- LOGIQUE DE COULEUR PAR GENRE ---
-    const getGenderColor = (gender, dogId) => {
-        if (gender === 'U') return COLOR_UNKNOWN;
-        
-        const palette = gender === 'F' ? COLORS_FEMALE : COLORS_MALE;
-        
-        // Trouver le chien existant ou tous les chiens du genre opposé pour un index de couleur
-        const existingDog = dogs.find(d => d.id === dogId && d.gender === gender);
-        
-        if (existingDog && existingDog.color) {
-            // Si le chien existe et a déjà cette couleur, la garder
-            return existingDog.color;
-        }
-
-        // Si nouveau ou genre changé, attribuer la prochaine couleur disponible
-        const dogsOfSameGender = dogs.filter(d => d.gender === gender);
-        const count = dogsOfSameGender.length;
-        
-        return palette[count % palette.length];
+    const onPhoto = (e) => {
+        const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const MAX_SIZE = 150; let width = img.width; let height = img.height; if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } } const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); const resizedDataURL = canvas.toDataURL('image/jpeg', 0.6); setForm(prev => ({...prev, photo: resizedDataURL})); }; img.src = event.target.result; }; reader.readAsDataURL(file);
     };
-    // ------------------------------------
 
-    useEffect(() => {
-        const handleBack = (event) => {
-            if (modal) setModal(false);
-            else if (selectedDog) setSelectedDog(null);
-            else if (showTable) setShowTable(false);
-            else if (isRangeOpen) setIsRangeOpen(false);
-        };
-        window.addEventListener('popstate', handleBack);
-        return () => window.removeEventListener('popstate', handleBack);
-    }, [modal, selectedDog, isRangeOpen, showTable]);
+    const internalGetGenderColor = (gender, dogId) => getGenderColor(gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_UNKNOWN);
+    const logAction = async (action, data, collectionName, id) => { if (!window.fire) return; const { addDoc, collection } = window.fire; const db = window.db; const dataToLog = JSON.parse(JSON.stringify(data)); if (dataToLog.photo) dataToLog.photo = "Base64 (omitted)"; try { await addDoc(collection(db, "history"), { action, collection: collectionName, data: JSON.stringify(dataToLog), timestamp: new Date(), docId: id || null }); } catch (e) { console.error(e); } };
+    const restoreData = async (historyItem) => { const { addDoc, updateDoc, doc, deleteDoc } = window.fire; const db = window.db; let restoredData; try { restoredData = JSON.parse(historyItem.data); if (historyItem.action === 'MODIFICATION') { if (!confirm(`Annuler la modification?`)) return; await updateDoc(doc(db, historyItem.collection, historyItem.docId), restoredData); await logAction("RESTAURATION", { actionType: "MODIFICATION_ANNULEE", restored: true }, historyItem.collection, historyItem.docId); } else if (historyItem.action === 'SUPPRESSION') { if (!confirm(`Restaurer la suppression?`)) return; await updateDoc(doc(db, historyItem.collection, historyItem.docId), restoredData); await logAction("RESTAURATION", { actionType: "SUPPRESSION_ANNULEE", restored: true }, historyItem.collection, historyItem.docId); } else if (historyItem.action === 'CRÉATION') { if (!confirm(`Annuler la création?`)) return; await deleteDoc(doc(db, historyItem.collection, historyItem.docId)); await logAction("RESTAURATION", { actionType: "CREATION_ANNULEE", restored: true }, historyItem.collection, historyItem.docId); } await deleteDoc(doc(db, 'history', historyItem.id)); setHistoryDetail(null); alert("Restauration réussie !"); } catch (e) { console.error(e); alert("Erreur restauration."); } };
 
+    useEffect(() => { const handleBack = () => { if (historyDetail) setHistoryDetail(null); else if (isDogPickerOpen) setIsDogPickerOpen(false); else if (modal) { setModal(false); setIsEditing(false); } else if (selectedDog) setSelectedDog(null); else if (showTable) setShowTable(false); else if (isRangeOpen) setIsRangeOpen(false); else if (view === 'history') setView('calendar'); }; window.addEventListener('popstate', handleBack); return () => window.removeEventListener('popstate', handleBack); }, [modal, selectedDog, isRangeOpen, showTable, isDogPickerOpen, view, historyDetail]);
     const pushHistory = () => { window.history.pushState({ modal: true }, ''); };
+    const openDogPicker = () => { pushHistory(); setIsDogPickerOpen(true); }; 
 
     useEffect(() => {
         const timer = setTimeout(() => setSplash(false), 2000); 
         setTimeout(() => {
             if (!window.fire) return;
-            const { collection, onSnapshot } = window.fire;
-            const db = window.db;
+            const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db;
             onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
             onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
-        }, 1000);
-        return () => clearTimeout(timer);
+            const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
+            onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()}))));
+        }, 1000); return () => clearTimeout(timer);
     }, []);
 
     const openForm = (type, data = {}) => {
         pushHistory(); setEditId(data.id || null); setIsDogMode(type === 'dog');
         let initialData = defForm;
-
-        if (type === 'dog') {
-            initialData = { ...data, dogId: data.id, dogName: data.name, ownerName: data.owner, breed: data.breed, phone: data.phone, gender: data.gender || 'U' };
-        } else if (type === 'edit') {
-            initialData = { ...data };
-            if (!initialData.phone && data.dogId) { 
-                const linked = dogs.find(d => d.id === data.dogId); 
-                if (linked) { initialData.phone = linked.phone; initialData.photo = linked.photo; } 
-            }
-            initialData.photo = data.photo || initialData.photo; 
-            
-            initialData.isAllDay = data.isAllDay === undefined ? true : data.isAllDay;
-            initialData.startTime = data.startTime || defForm.startTime;
-            initialData.endTime = data.endTime || defForm.endTime;
-            // Récupère le genre stocké dans la réservation ou le chien lié
-            initialData.gender = data.gender || (dogs.find(d => d.id === data.dogId)?.gender) || 'U'; 
-
-        } else if (type === 'new') {
-            initialData = { ...defForm, start: data.date || '' };
-        }
+        if (type === 'dog') { initialData = { ...data, dogId: data.id, dogName: data.name, ownerName: data.owner, breed: data.breed, phone: data.phone, gender: data.gender || 'U' }; setIsEditing(true); } else if (type === 'edit') { initialData = { ...data }; if (!initialData.phone && data.dogId) { const linked = dogs.find(d => d.id === data.dogId); if (linked) { initialData.phone = linked.phone; initialData.photo = linked.photo; } } initialData.photo = data.photo || initialData.photo; initialData.isAllDay = data.isAllDay === undefined ? true : data.isAllDay; initialData.startTime = data.startTime || defForm.startTime; initialData.endTime = data.endTime || defForm.endTime; initialData.gender = data.gender || (dogs.find(d => d.id === data.dogId)?.gender) || 'U'; initialData.isProvisional = data.isProvisional === undefined ? false : data.isProvisional; setIsEditing(false); } else if (type === 'new') { initialData = { ...defForm, start: data.date || '' }; setIsEditing(true); }
         setForm(initialData); setModal(true);
     };
-
-    const sendMail = (action, data, oldData = null) => {
-        const emails = "a.lorillon@gmail.com,g.lorillon16@gmail.com";
-        const subject = encodeURIComponent(`[4Pattes] ${action} : ${data.dogName}`);
-        
-        let body = `🐶 ${action} - ${data.dogName}\n\n`;
-        
-        if (data.isAllDay) {
-            body += `📅 NOUVEAU : Du ${new Date(data.start).toLocaleDateString()} Au ${new Date(data.end).toLocaleDateString()}\n`;
-        } else {
-            body += `📅 NOUVEAU : Du ${new Date(data.start).toLocaleString()} Au ${new Date(data.end).toLocaleString()}\n`;
-        }
-        body += `⏰ Journée entière : ${data.isAllDay ? 'Oui' : 'Non (' + data.startTime + ' - ' + data.endTime + ')'}\n`;
-        
-        if (oldData) {
-            body += `\n--- Anciennes Données ---\n`;
-            if (oldData.isAllDay) {
-                body += `📅 ANCIEN : Du ${new Date(oldData.start).toLocaleDateString()} Au ${new Date(oldData.end).toLocaleDateString()}\n`;
-            } else {
-                body += `📅 ANCIEN : Du ${new Date(oldData.start).toLocaleString()} Au ${new Date(oldData.end).toLocaleString()}\n`;
-            }
-            body += `⏰ ANCIENNE JOURNÉE ENTIÈRE : ${oldData.isAllDay ? 'Oui' : 'Non (' + oldData.startTime + ' - ' + oldData.endTime + ')'}\n`;
-        }
-
-        body += `\n💰 Prix : ${data.price || 0} €\n`;
-        body += `📝 Notes : ${data.notes || "Aucune"}\n`;
-        body += `Propriétaire : ${data.ownerName || "Inconnu"}\n`;
-        body += `Tél : ${data.phone || ""}`;
-
-        const link = `mailto:${emails}?subject=${subject}&body=${encodeURIComponent(body)}`;
-        setTimeout(() => { window.location.href = link; }, 500);
-    };
-
-    const save = async () => {
-        if (!window.fire) return alert("Firebase HS");
-        try {
-            const { addDoc, updateDoc, doc, collection } = window.fire;
-            const db = window.db;
-            let dId = form.dogId;
-            const clean = (val) => val === undefined || val === null ? "" : val;
-
-            // DÉTERMINER LA COULEUR AVANT DE SAUVEGARDER LE CHIEN
-            const newColor = getGenderColor(form.gender, dId);
-            
-            const dogData = { 
-                name: clean(form.dogName)||"Inconnu", 
-                breed: clean(form.breed), 
-                owner: clean(form.ownerName), 
-                phone: clean(form.phone), 
-                notes: clean(form.notes), 
-                photo: form.photo||null, 
-                color: newColor, // COULEUR DYNAMIQUE
-                gender: form.gender // AJOUT/MAJ DU GENRE
-            };
-
-            if (dId) { 
-                await updateDoc(doc(db, "dogs", dId), dogData);
-            } 
-            else { 
-                const ref = await addDoc(collection(db, "dogs"), {...dogData}); 
-                dId = ref.id; 
-            }
-
-            if (!isDogMode) {
-                const isAllDay = form.isAllDay;
-                
-                let startDate = clean(form.start) || '';
-                let endDate = clean(form.end) || '';
-
-                if (!startDate || !endDate) {
-                    alert("Veuillez sélectionner une période de séjour valide.");
-                    return;
-                }
-
-                if (!isAllDay) {
-                    const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate;
-                    const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate;
-                    
-                    startDate = baseStart + 'T' + clean(form.startTime) + ':00';
-                    endDate = baseEnd + 'T' + clean(form.endTime) + ':00';
-                } else if (startDate.includes('T')) {
-                    startDate = startDate.split('T')[0];
-                    endDate = endDate.split('T')[0];
-                }
-
-                let price = clean(form.price) || "0";
-                let deposit = clean(form.deposit) || "";
-                if (form.paymentStatus === 'appointment') {
-                    price = "0";
-                    deposit = "";
-                }
-
-                const bookData = {
-                    dogId: dId, dogName: clean(form.dogName), breed: clean(form.breed), ownerName: clean(form.ownerName), phone: clean(form.phone),
-                    price: price, start: startDate, end: endDate, color: newColor, 
-                    notes: clean(form.notes), source: clean(form.source),
-                    paymentStatus: form.paymentStatus||'pending', deposit: deposit,
-                    isAllDay: isAllDay, startTime: clean(form.startTime), endTime: clean(form.endTime),
-                    photo: form.photo || null,
-                    gender: form.gender // AJOUT DU GENRE A LA RÉSERVATION
-                };
-                if (editId) {
-                    const oldBooking = bookings.find(b => b.id === editId);
-                    await updateDoc(doc(db, "bookings", editId), bookData);
-                    if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) sendMail("MODIFICATION DATES", bookData, oldBooking);
-                } else { await addDoc(collection(db, "bookings"), bookData); sendMail("NOUVELLE RÉSERVATION", bookData); }
-            }
-            setModal(false);
-        } catch (err) { console.error(err); alert("Erreur: "+err.message); }
-    };
-
-    const remove = async () => {
-        if(!confirm("Supprimer ?")) return;
-        const { deleteDoc, doc } = window.fire;
-        const db = window.db;
-        if (isDogMode) { await deleteDoc(doc(db, "dogs", form.id)); setSelectedDog(null); }
-        else { const dataBackup = { ...form }; await deleteDoc(doc(db, "bookings", editId)); sendMail("SUPPRESSION", dataBackup); }
-        setModal(false);
-    };
-
-    const onPhoto = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const MAX_SIZE = 150; 
-                let width = img.width;
-                let height = img.height;
-
-                if (width > height) {
-                    if (width > MAX_SIZE) {
-                        height *= MAX_SIZE / width;
-                        width = MAX_SIZE;
-                    }
-                } else {
-                    if (height > MAX_SIZE) {
-                        width *= MAX_SIZE / height;
-                        height = MAX_SIZE;
-                    }
-                }
-
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                const resizedDataURL = canvas.toDataURL('image/jpeg', 0.6);
-                setForm(prev => ({...prev, photo: resizedDataURL}));
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    };
-    const pickDog = (d) => setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, notes:d.notes, photo:d.photo, gender: d.gender || 'U' });
     
-    const openRange = () => {
-        pushHistory(); 
-        const startDate = form.start || null;
-        const endDate = form.end || null;
-        const startObj = startDate && !isNaN(new Date(startDate)) ? new Date(startDate) : null;
-        const endObj = endDate && !isNaN(new Date(endDate)) ? new Date(endDate) : null;
-        
-        setRangeSel({ start: startObj, end: endObj });
-        setPickerViewDate(startObj || new Date()); 
-        setIsRangeOpen(true);
-    };
-
+    const pickDog = (d) => { setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, notes:d.notes, photo:d.photo, gender: d.gender || 'U' }); }
+    const selectDogFromPicker = (d) => { setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, notes:d.notes, photo:d.photo, gender: d.gender || 'U' }); setIsDogPickerOpen(false); };
+    const openRange = () => { pushHistory(); const startDate = form.start || null; const endDate = form.end || null; const startObj = startDate && !isNaN(new Date(startDate)) ? new Date(startDate) : null; const endObj = endDate && !isNaN(new Date(endDate)) ? new Date(endDate) : null; setRangeSel({ start: startObj, end: endObj }); setPickerViewDate(startObj || new Date()); setIsRangeOpen(true); };
     const handleRangeClick = (d) => { let { start, end } = rangeSel; if (!start || (start && end)) { setRangeSel({ start: d, end: null }); } else { const s = d < start ? d : start; const e = d < start ? start : d; setRangeSel({ start: s, end: e }); setTimeout(() => { const toLocal = (dt) => { const offset = dt.getTimezoneOffset() * 60000; return new Date(dt.getTime() - offset).toISOString().split('T')[0]; }; setForm(prev => ({ ...prev, start: toLocal(s), end: toLocal(e) })); setIsRangeOpen(false); }, 300); } };
     
-    const exportData = () => {
-        let csvContent = "\uFEFFDate Début;Date Fin;Nom Chien;Race;Propriétaire;Téléphone;Source;Prix;Statut Paiement;Acompte;Notes\n";
-        bookings.forEach(b => {
-            const dog = dogs.find(d => d.id === b.dogId) || {};
-            let st = "À Payer"; if(b.paymentStatus==='deposit') st="Acompte"; if(b.paymentStatus==='paid') st="Payé"; else if (b.paymentStatus==='appointment') st="RDV";
-            const row = [ b.start, b.end, b.dogName, dog.breed||b.breed||"", b.ownerName, dog.phone||b.phone||"", b.source||"", b.price, st, b.deposit||"", `"${(b.notes||"").replace(/"/g,'""')}"` ];
-            csvContent += row.join(";") + "\n";
-        });
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `DogManager_Export_${new Date().toISOString().split('T')[0]}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    };
+    const save = async () => { if (!window.fire) return alert("Firebase HS"); try { const { addDoc, updateDoc, doc, collection } = window.fire; const db = window.db; let dId = form.dogId; const clean = (val) => val === undefined || val === null ? "" : val; const newColor = internalGetGenderColor(form.gender, dId); const dogData = { name: clean(form.dogName)||"Inconnu", breed: clean(form.breed), owner: clean(form.ownerName), phone: clean(form.phone), notes: clean(form.notes), photo: form.photo||null, color: newColor, gender: form.gender }; if (dId) { const oldDog = dogs.find(d => d.id === dId); await logAction("MODIFICATION", oldDog, "dogs", dId); await updateDoc(doc(db, "dogs", dId), dogData); } else { const ref = await addDoc(collection(db, "dogs"), {...dogData}); dId = ref.id; await logAction("CRÉATION", dogData, "dogs", dId); } if (!isDogMode) { const isAllDay = form.isAllDay; let startDate = clean(form.start) || ''; let endDate = clean(form.end) || ''; if (!startDate || !endDate) { alert("Veuillez sélectionner une période de séjour valide."); return; } if (!isAllDay) { const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate; const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate; startDate = baseStart + 'T' + clean(form.startTime) + ':00'; endDate = baseEnd + 'T' + clean(form.endTime) + ':00'; } else if (startDate.includes('T')) { startDate = startDate.split('T')[0]; endDate = endDate.split('T')[0]; } let price = clean(form.price) || "0"; let deposit = clean(form.deposit) || ""; if (form.paymentStatus === 'appointment') { price = "0"; deposit = ""; } const bookData = { dogId: dId, dogName: clean(form.dogName), breed: clean(form.breed), ownerName: clean(form.ownerName), phone: clean(form.phone), price: price, start: startDate, end: endDate, color: newColor, notes: clean(form.notes), source: clean(form.source), paymentStatus: form.paymentStatus||'pending', deposit: deposit, isAllDay: isAllDay, startTime: clean(form.startTime), endTime: clean(form.endTime), photo: form.photo || null, gender: form.gender, isProvisional: form.isProvisional || false }; if (editId) { const oldBooking = bookings.find(b => b.id === editId); await logAction("MODIFICATION", oldBooking, "bookings", editId); await updateDoc(doc(db, "bookings", editId), bookData); if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) sendMail("MODIFICATION DATES", bookData, oldBooking); } else { const ref = await addDoc(collection(db, "bookings"), bookData); await logAction("CRÉATION", bookData, "bookings", ref.id); sendMail("NOUVELLE RÉSERVATION", bookData); } } setModal(false); setIsEditing(false); } catch (err) { console.error(err); alert("Erreur: "+err.message); } };
+    const remove = async () => { if(!confirm("Supprimer ?")) return; const { deleteDoc, doc } = window.fire; const db = window.db; const dataBackup = { ...form }; if (isDogMode) { await deleteDoc(doc(db, "dogs", form.id)); await logAction("SUPPRESSION", dataBackup, "dogs", form.id); setSelectedDog(null); } else { await deleteDoc(doc(db, "bookings", editId)); await logAction("SUPPRESSION", dataBackup, "bookings", editId); sendMail("SUPPRESSION", dataBackup); } setModal(false); setIsEditing(false); };
 
-    // --- RangePickerModal Definition ---
-    const RangePickerModal = ({ isRangeOpen, setIsRangeOpen, rangeSel, setRangeSel, pickerViewDate, setPickerViewDate, handleRangeClick }) => {
-        if (!isRangeOpen) return null;
-        const daysInMonth = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth() + 1, 0).getDate();
-        const startOffset = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), 1).getDay() || 7;
-        
-        return (
-            <div className={S.rangeOverlay}>
-                <div className={S.rangeBox}>
-                    <div className="flex justify-between items-center mb-2 px-2">
-                        <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()-1)))} className="p-1"><i className="fas fa-chevron-left text-xs"></i></button>
-                        <span className="font-bold text-sm capitalize text-stone-700 font-serif">{pickerViewDate.toLocaleString('fr-FR', {month:'long', year:'numeric'})}</span>
-                        <button onClick={() => setPickerViewDate(new Date(pickerViewDate.setMonth(pickerViewDate.getMonth()+1)))} className="p-1"><i className="fas fa-chevron-right text-xs"></i></button>
-                    </div>
-                    <div className="grid grid-cols-7 text-center text-[10px] font-bold text-stone-300 mb-1">
-                        {['L','M','Me','J','V','S','D'].map((d, i) => <div key={i}>{d}</div>)}
-                    </div>
-                    <div className={S.rangeGrid}>
-                        {Array.from({length: startOffset-1}).map((_,i) => <div key={`empty-${i}`}></div>)}
-                        {Array.from({length: daysInMonth}).map((_, i) => {
-                            const d = new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth(), i+1);
-                            const isStart = rangeSel.start && d.toDateString() === rangeSel.start.toDateString();
-                            const isEnd = rangeSel.end && d.toDateString() === rangeSel.end.toDateString();
-                            const isIn = rangeSel.start && rangeSel.end && d > rangeSel.start && d < rangeSel.end;
-                            return (
-                                <div key={i} onClick={() => handleRangeClick(d)} 
-                                     className={`${S.rangeCell} ${isStart || isEnd ? 'bg-rose-400 text-white shadow-lg scale-110 z-10' : isIn ? 'bg-rose-50 text-rose-400' : 'bg-stone-50 text-stone-600'}`}>
-                                    {i+1}
-                                </div>
-                            );
-                        })}
-                    </div>
-                    <div className="text-center mt-2">
-                        <button onClick={() => setIsRangeOpen(false)} className="text-stone-400 font-bold text-xs">Fermer</button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const Calendar = () => {
-        const y = date.getFullYear(), m = date.getMonth();
-        const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1));
-        let weeks = [], curr = new Date(start);
-        for(let w=0; w<6; w++) {
-            let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); }
-            if(w>4 && days[0].getMonth() !== m) break;
-            const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999);
-            const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
-            const items = evts.map(ev => {
-                const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1;
-                let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6;
-                return { ...ev, dur, st, en };
-            });
-            const placed = []; const rows = [];
-            items.forEach(ev => { let rowIdx = 0; while(true) { if(!rows[rowIdx]) rows[rowIdx] = Array(7).fill(false); let fit = true; for(let i=ev.st; i<=ev.en; i++) if(rows[rowIdx][i]) fit=false; if(fit) { for(let i=ev.st; i<=ev.en; i++) rows[rowIdx][i] = true; placed.push({...ev, row: rowIdx}); break; } rowIdx++; } });
-            weeks.push({days, items: placed});
-        }
-        return (
-            <div className="flex flex-col h-full overflow-hidden">
-                <div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div>
-                <div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>
-                    {weeks.map((w,i) => (
-                        <div key={i} className="calendar-week" style={{flex:1}}>
-                            {w.days.map((d,j) => {
-                                const isToday = d.toDateString() === new Date().toDateString();
-                                return <div key={j} className={`calendar-day`} onClick={()=>openForm('new',{date:d.toISOString().split('T')[0]})}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>;
-                            })}
-                            {w.items.map(ev => (
-                                <div key={ev.id} className="absolute h-5 rounded-md text-[9px] text-stone-700 font-bold px-1 overflow-hidden z-10 border border-white/50 cursor-pointer shadow-sm flex items-center gap-1" style={{backgroundColor:ev.color, left:`${ev.st*14.28}%`, width:`${(ev.en-ev.st+1)*14.28}%`, top:`${25 + ev.row*20}px`, opacity: 0.8}} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}>
-                                    
-                                    {ev.paymentStatus === 'appointment' ? (
-                                        <>
-                                            <span className="truncate">{ev.dogName}</span>
-                                            <i className="fas fa-calendar-check text-[9px] ml-1 shrink-0"></i>
-                                        </>
-                                    ) : (
-                                        <>
-                                            {ev.paymentStatus==='pending' && <div className="w-2 h-2 rounded-full bg-red-500 border border-white shrink-0"></div>}
-                                            {ev.paymentStatus==='deposit' && <div className="w-2 h-2 rounded-full bg-orange-400 border border-white shrink-0"></div>}
-                                            <span className="truncate">{ev.dogName} <span className="opacity-75 text-[9px]">({ev.dur}j)</span></span>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                    <div style={{height:'140px'}}></div>
-                </div>
-                <div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div>
-            </div>
-        );
-    };
-
-    const Stats = () => {
-        const total = bookings.reduce((s,b)=>s+Number(b.price||0),0);
-        const yTotal = bookings.filter(b=>b.start.startsWith(statsYear)).reduce((s,b)=>s+Number(b.price||0),0);
-        const getFinancials = () => {
-            let globalTotal = 0; let yearTotal = 0; const monthlyData = Array(12).fill(0);
-            bookings.forEach(b => {
-                const price = Number(b.price || 0); if(price === 0) return; const start = new Date(b.start); start.setHours(12); const end = new Date(b.end); end.setHours(12);
-                const nbDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1); const pricePerDay = price / nbDays; globalTotal += price;
-                let current = new Date(start); for(let i=0; i<nbDays; i++){ if(current.getFullYear()===statsYear) { monthlyData[current.getMonth()]+=pricePerDay; yearTotal+=pricePerDay; } current.setDate(current.getDate()+1); }
-            }); return { globalTotal, yearTotal, monthlyData };
-        };
-        const { globalTotal: gTotal, yearTotal: yrTotal, monthlyData } = getFinancials();
-        const getDogStats = () => { const stats = {}; bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; stats[n] = (stats[n]||0) + Number(b.price||0); }); return Object.entries(stats).map(([name, val]) => ({name, val})).sort((a,b) => b.val - a.val); };
-        const dogStats = getDogStats();
-        const [activeSnap, setActiveSnap] = useState(0);
-
-        useEffect(() => {
-            if(document.getElementById('cBar')) {
-                if(window.bC) window.bC.destroy(); window.bC = new Chart(document.getElementById('cBar'), {type:'bar', data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'], datasets:[{label:'CA', data:monthlyData, backgroundColor:'#fb7185', borderRadius:4}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
-            }
-            if(document.getElementById('cPie')) {
-                 const dRev={}; const sRev={};
-                 bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; dRev[n]=(dRev[n]||0)+Number(b.price||0); sRev[b.source||"Autre"]=(sRev[b.source||"Autre"]||0)+Number(b.price||0); });
-                 
-                 const sortedDogRevenue = Object.entries(dRev).sort(([, a], [, b]) => b - a);
-                 const dogLabels = sortedDogRevenue.map(([name]) => name);
-                 const dogData = sortedDogRevenue.map(([, val]) => val);
-                 
-                 const sortedSourceRevenue = Object.entries(sRev).sort(([, a], [, b]) => b - a);
-                 const sourceLabels = sortedSourceRevenue.map(([name]) => name);
-                 const sourceData = sortedSourceRevenue.map(([, val]) => val);
-                 
-                 if(window.pC) window.pC.destroy(); 
-                 window.pC = new Chart(document.getElementById('cPie'), {type:'doughnut', data:{labels:dogLabels, datasets:[{data:dogData, backgroundColor:COLORS}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
-                 
-                 if(window.sC) window.sC.destroy(); 
-                 window.sC = new Chart(document.getElementById('cSource'), {type:'doughnut', data:{labels:sourceLabels, datasets:[{data:sourceData, backgroundColor:COLORS.slice().reverse()}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}});
-            }
-        }, [statsYear, bookings, dogs, showTable]);
-
-        const handleScroll = (e) => {
-            const page = Math.round(e.target.scrollLeft / e.target.clientWidth);
-            setActiveSnap(page);
-        };
-
-        return (
-            <>
-                <div className="snap-container" onScroll={(e)=>setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth))}>
-                    <div className="snap-page"><div className="bg-white p-6 rounded-3xl shadow-sm mb-4 border border-stone-100"><div className={S.statTitle}>CA Global</div><div className="text-4xl font-serif font-bold text-stone-700 mt-2">{Math.round(gTotal)} €</div></div><div className="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex-1 min-h-[300px] flex flex-col"><div className="flex justify-between items-center mb-2"><button onClick={()=>setStatsYear(statsYear-1)}>◀</button><div className="text-center"><div className={S.statTitle}>CA {statsYear}</div><div className="text-xl font-bold text-rose-400">{Math.round(yrTotal)} €</div></div><button onClick={()=>setStatsYear(statsYear+1)}>▶</button></div><div className="flex-1 relative min-h-0"><canvas id="cBar"></canvas></div></div><button onClick={exportData} className="w-full bg-stone-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-20"><i className="fas fa-file-csv"></i> Export CSV</button></div>
-                    <div className="snap-page"><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 h-[45%] flex flex-col relative"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400 flex items-center gap-2 z-20 w-full">PAR CHIEN <button onClick={()=>setShowTable(true)} className="ml-auto mr-8 bg-stone-100 px-3 py-1 rounded-full text-stone-600 hover:bg-stone-200 border border-stone-200 shadow-sm pointer-events-auto"><i className="fas fa-list"></i></button></div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cPie"></canvas></div></div><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 h-[45%] flex flex-col relative"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400">PAR SOURCE</div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cSource"></canvas></div></div></div>
-                </div>
-                <div className="stats-dots-container"><div className={`stats-dot ${activeSnap===0 ? 'active' : 'inactive'}`}></div><div className={`stats-dot ${activeSnap===1 ? 'active' : 'inactive'}`}></div></div>
-                {showTable && <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Détail par Chien</h3><button onClick={()=>setShowTable(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4"><table className="w-full text-sm text-left text-stone-600"><thead className="text-xs text-stone-400 uppercase bg-stone-50"><tr><th className="px-4 py-2">Nom</th><th className="px-4 py-2 text-right">CA Total</th></tr></thead><tbody>{dogStats.map((d, i) => <tr key={i} className="border-b border-stone-100"><td className="px-4 py-3 font-bold">{d.name}</td><td className="px-4 py-3 text-right text-rose-400 font-bold">{Math.round(d.val)} €</td></tr>)}</tbody></table></div></div></div>}
-            </>
-        );
-    };
-
-    const Directory = () => {
-        const [filter, setFilter] = useState('');
-        const openDetail = (d) => { pushHistory(); setSelectedDog(d); };
-        if (selectedDog) {
-            const history = bookings.filter(b => b.dogId === selectedDog.id).sort((a,b) => new Date(b.start) - new Date(a.start));
-            return ( <div className="scroll-view p-4 bg-stone-50"><div className="flex justify-between items-center mb-6"><button onClick={()=>setSelectedDog(null)} className="text-rose-400 font-bold flex items-center gap-2"><i className="fas fa-arrow-left"></i> Retour</button><button onClick={()=>openForm('dog', selectedDog)} className="w-8 h-8 bg-white rounded-full text-stone-400 shadow">✎</button></div><div className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center mb-4">{selectedDog.photo ? <img src={selectedDog.photo} onClick={()=>setFullImg(selectedDog.photo)} className={S.avatarLarge + " cursor-pointer"} /> : <div className={S.avatarLarge} style={{background:selectedDog.color, color:'#fff'}}>{selectedDog.name[0]}</div>}<h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">{selectedDog.name}</h2><p className="text-stone-500 font-medium italic">{selectedDog.breed}</p><p className="text-stone-400">{selectedDog.owner}</p><div className="flex gap-4 mt-4"><a href={`tel:${selectedDog.phone}`} className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-xl">📞</a><a href={`sms:${selectedDog.phone}`} className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xl">💬</a><a href={`https://wa.me/${selectedDog.phone}`} className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl">📱</a></div><div className="mt-6 w-full bg-stone-50 p-4 rounded-xl text-sm italic text-stone-600 border border-stone-100">{selectedDog.notes || "Aucune note."}</div><button onClick={()=>{openForm('new'); pickDog(selectedDog);}} className={S.btn}>Nouvelle Garde</button></div><h3 className="text-stone-400 text-xs uppercase font-bold tracking-widest mb-2">Historique</h3>{history.map(h => (<div key={h.id} className="bg-white p-4 rounded-xl mb-2 flex justify-between shadow-sm border border-stone-100 cursor-pointer" onClick={() => openForm('edit', h)}><span className="text-stone-600 font-medium">Du {new Date(h.start).toLocaleDateString()} au {new Date(h.end).toLocaleDateString()}</span><span className="font-bold text-rose-400">{h.price} €</span></div>))}</div> );
-        }
-        const sorted = dogs.sort((a,b) => a.name.localeCompare(b.name));
-        const grouped = sorted.reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {});
-        const letters = Object.keys(grouped).sort();
-        return ( <div className="flex h-full bg-stone-50"><div className="flex-1 overflow-y-auto p-4 pb-32 no-scrollbar scroll-smooth"><input className="w-full p-4 rounded-2xl border-none shadow-sm mb-4 text-stone-600 outline-none placeholder-stone-300 sticky top-0 z-10" placeholder="Rechercher..." value={filter} onChange={e=>setFilter(e.target.value)} />{filter ? (dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))).map(d => (<div key={d.id} onClick={() => openDetail(d)} className={S.card}>{d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div></div>))) : (letters.map(l => (<div key={l} id={`letter-${l}`} className="mb-4"><div className="text-xs font-bold text-rose-400 mb-2 pl-2 sticky top-14 bg-stone-50 z-0">{l}</div>{grouped[l].map(d => (<div key={d.id} onClick={() => openDetail(d)} className={S.card}>{d.photo ? <img src={d.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:d.color, color:'#fff'}}>{d.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{d.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{d.breed}</div></div></div>))}</div>)))}</div>{!filter && (<div className="absolute right-1 top-20 bottom-32 w-6 flex flex-col justify-center items-center z-40 text-[10px] font-bold text-rose-400 bg-white/50 rounded-full">{letters.map(l => <div key={l} className="flex-1 w-full flex items-center justify-center" onClick={()=>{document.getElementById(`letter-${l}`).scrollIntoView({behavior:'auto'})}}>{l}</div>)}</div>)}</div> );
-    };
-
-    if (splash) return ( <div className={S.splash}><img src="logo.png" className={S.splashLogo} /><h1 className={S.splashTitle}>4Pattes Manager</h1><div className={S.splashSub}>Chargement...</div></div> );
-
-    // Fonction pour gérer le basculement du genre
-    const handleGenderChange = (newGender) => {
-        // Logique de basculement: M -> F -> U -> M
-        let nextGender = form.gender;
-        
-        if (newGender === 'M' && form.gender !== 'M') {
-            nextGender = 'M';
-        } else if (newGender === 'F' && form.gender !== 'F') {
-            nextGender = 'F';
-        } else {
-            // Si on clique sur le genre actuel (M ou F), on revient à Inconnu.
-            // Si on clique sur Inconnu, on passe à Mâle (choix par défaut)
-            nextGender = newGender === 'U' ? 'M' : 'U';
-        }
-
-        if (nextGender === form.gender) {
-             // Si le clic ne change rien (par ex. si on clique sur M alors qu'on est déjà à M, on passe à U)
-             nextGender = form.gender === 'M' ? 'U' : form.gender === 'F' ? 'U' : 'M';
-        } else {
-             nextGender = newGender;
-        }
-
-        setForm({...form, gender: newGender});
-    };
-    
-    // Composant Gender Switch à trois états
-    const GenderSwitchComponent = () => {
-        const currentGender = form.gender || 'U';
-        
-        return (
-            <div className="flex items-center gap-4 mt-3">
-                <label className={S.label}>Genre</label>
-                <div className="gender-select">
-                    <div 
-                        className={`gender-btn ${currentGender === 'M' ? 'active-M' : ''}`}
-                        onClick={() => setForm({...form, gender: 'M'})}
-                    >
-                        Mâle ♂
-                    </div>
-                    <div 
-                        className={`gender-btn ${currentGender === 'U' ? 'active-U' : ''}`}
-                        onClick={() => setForm({...form, gender: 'U'})}
-                    >
-                        Inconnu
-                    </div>
-                    <div 
-                        className={`gender-btn ${currentGender === 'F' ? 'active-F' : ''}`}
-                        onClick={() => setForm({...form, gender: 'F'})}
-                    >
-                        Femelle ♀
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    if (splash) return ( 
+        <div className="fixed inset-0 z-[100] bg-[#fafaf9] flex flex-col items-center justify-center">
+            <img src="logo.png" className="w-32 h-32 rounded-3xl shadow-2xl mb-6 object-cover border-4 border-white" />
+            <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou, je t'aime</h1>
+            <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center">4 Pattes Manager</div> 
+            <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center"></div> 
+        </div>
+    );
 
     return (
         <div className="flex flex-col h-full bg-stone-50">
-            <div className="flex-1 overflow-hidden relative">{view==='calendar' && <Calendar/>}{view==='directory' && <Directory/>}{view==='stats' && <Stats/>}</div>
-            <div className={S.nav}><div className="flex gap-8"><div onClick={()=>setView('calendar')} className={S.iconBox}><i className={`fas fa-calendar-alt text-2xl ${view==='calendar'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Agenda</span></div><div onClick={()=>setView('directory')} className={S.iconBox}><i className={`fas fa-address-book text-2xl ${view==='directory'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Carnet</span></div></div><div className={S.fabPos}><button onClick={()=>openForm('new', {})} className={S.fab}><i className="fas fa-plus text-2xl"></i></button></div><div className="flex justify-end w-32"><div onClick={()=>setView('stats')} className={S.iconBox}><i className={`fas fa-chart-pie text-2xl ${view==='stats'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Stats</span></div></div></div>
+            <div className="flex-1 overflow-hidden relative">{view==='calendar' && <Calendar date={date} setDate={setDate} openForm={openForm} bookings={bookings} />}{view==='directory' && <Directory dogs={dogs} bookings={bookings} openForm={openForm} pickDog={pickDog} setSelectedDog={setSelectedDog} selectedDog={selectedDog} />} {view==='stats' && <Stats dogs={dogs} bookings={bookings} />} {view==='history' && <HistoryPage setHistoryDetail={setHistoryDetail} onRestore={restoreData} history={history} />}</div>
+            
+            <div className={S.nav}>
+                <div className="flex gap-8">
+                    <div onClick={()=>setView('calendar')} className={S.iconBox}><i className={`fas fa-calendar-alt text-2xl ${view==='calendar'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Agenda</span></div>
+                    <div onClick={()=>setView('directory')} className={S.iconBox}><i className={`fas fa-address-book text-2xl ${view==='directory'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Carnet</span></div>
+                </div>
+                <div className={S.fabPos}><button onClick={()=>openForm('new', {})} className={S.fab}><i className="fas fa-plus text-2xl"></i></button></div>
+                
+                <div className="flex justify-end gap-6"> 
+                    <div onClick={()=>setView('history')} className={S.iconBox}><i className={`fas fa-history text-2xl ${view==='history'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Historique</span></div>
+                    <div onClick={()=>setView('stats')} className={S.iconBox}><i className={`fas fa-chart-pie text-2xl ${view==='stats'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Stats</span></div>
+                </div>
+            </div>
+            
             {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
+            
+            {/* 🐶 MODAL PICKER DU CARNET */}
+            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
+            
+            {/* 📋 MODAL DE DÉTAIL HISTORIQUE */}
+            <HistoryDetailModal item={historyDetail} onClose={() => setHistoryDetail(null)} onRestore={restoreData} dogs={dogs} bookings={bookings} />
+
+            
             {modal && (
-                <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">{isDogMode?'Fiche Chien':(editId?'Modifier':'Nouveau')}</h3><button onClick={()=>setModal(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4 space-y-4"><div className="flex gap-4 items-center"><div className="relative w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-stone-200 shrink-0">{form.photo ? <img src={form.photo} className="w-full h-full object-cover"/> : <span className="text-2xl text-stone-300">📷</span>}<input type="file" onChange={onPhoto} className="absolute inset-0 opacity-0"/></div><div className="flex-1">{!editId && !isDogMode && (<select className="w-full mb-2 p-2 rounded-lg bg-stone-100 text-xs border-none" onChange={e => {const d=dogs.find(x=>x.id===e.target.value); if(d) pickDog(d);}}><option value="">Remplir depuis carnet...</option>{dogs.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select>)}<input className={S.input} value={form.dogName||''} onChange={e=>setForm({...form, dogName:e.target.value})} placeholder="Nom Chien" /><input className={S.input} value={form.breed||''} onChange={e=>setForm({...form, breed:e.target.value})} placeholder="Race" />{GenderSwitchComponent()}</div></div>{!isDogMode && (<div><div onClick={openRange} className="bg-rose-50 p-4 rounded-2xl border border-rose-100 flex justify-between items-center active:bg-rose-100 transition cursor-pointer mb-2"><div><div className="text-xs font-bold text-rose-400 uppercase mb-1">Séjour</div><div className="font-bold text-stone-700 text-lg leading-tight">{form.start ? new Date(form.start).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Arrivée'} ➝ {form.end ? new Date(form.end).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Départ'}</div></div><i className="fas fa-calendar-alt text-rose-300 text-2xl"></i></div><div className="flex items-center gap-2 mb-2"><input type="checkbox" checked={form.isAllDay} onChange={(e) => setForm({...form, isAllDay: e.target.checked})} className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500"/><label className="text-sm font-medium text-stone-700">Journée entière</label></div>{!form.isAllDay && (<div className="flex gap-2 mt-2 mb-4"><div className="flex-1"><label className={S.label}>Heure Arrivée</label><input type="time" className={S.input} value={form.startTime||''} onChange={e=>setForm({...form, startTime:e.target.value})}/></div><div className="flex-1"><label className={S.label}>Heure Départ</label><input type="time" className={S.input} value={form.endTime||''} onChange={e=>setForm({...form, endTime:e.target.value})}/></div></div>)}<label className={S.label}>SOURCE</label><input className={S.input} list="sources" value={form.source||''} onChange={e=>setForm({...form, source:e.target.value})} placeholder="ex: Rover, Fidélisé..." /><datalist id="sources"><option value="Le Bon Coin"/><option value="Rover"/><option value="Animaute"/><option value="Fidélisé"/><option value="Bouche à oreille"/></datalist></div>)}<input className={S.input} value={form.ownerName||''} onChange={e=>setForm({...form, ownerName:e.target.value})} placeholder="Propriétaire" /><input className={S.input} type="tel" value={form.phone||''} onChange={e=>setForm({...form, phone:e.target.value})} placeholder="Téléphone" />{!isDogMode && (<div><div className="flex gap-2 mb-2"><div className="flex-1"><label className={S.label}>PRIX TOTAL</label><input className={S.input} type="number" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})} placeholder="€" disabled={form.paymentStatus === 'appointment'} /></div><div className="flex-1"><label className={S.label}>PAIEMENT</label><select className={S.input} value={form.paymentStatus||'pending'} onChange={e=>setForm({...form, paymentStatus:e.target.value, price: e.target.value === 'appointment' ? '0' : form.price, deposit: e.target.value === 'appointment' ? '' : form.deposit })}><option value="pending">🔴 À Payer</option><option value="deposit">🟠 Acompte</option><option value="paid">🟢 Payé</option><option value="appointment">🗓️ RDV</option></select></div></div>{form.paymentStatus === 'deposit' && (<div className="bg-orange-50 p-2 rounded-lg border border-orange-100 flex items-center gap-2 mb-2"><input className="w-20 p-1 text-sm border rounded" type="number" placeholder="Reçu" value={form.deposit||''} onChange={e=>setForm({...form, deposit:e.target.value})} /><span className="text-xs text-orange-800 font-bold">€ reçu. Reste : <span className="text-lg">{(form.price||0) - (form.deposit||0)} €</span></span></div>)}</div>)}<textarea className={`${S.input} h-24`} value={form.notes||''} onChange={e=>setForm({...form, notes:e.target.value})} placeholder="Notes..." /></div><div className="p-4 bg-white border-t flex gap-2"><button onClick={save} className={S.btn}>Valider</button>{(editId||isDogMode) && <button onClick={remove} className="text-red-400 font-bold px-4 mt-4">Sup.</button>}</div></div></div>
+                <div className={S.overlay}><div className={S.modal}><div className={S.modalHead}>
+                    
+                    {/* BOUTON ÉDITION DÉPLACÉ AU CENTRE GAUCHE */}
+                    {editId && !isDogMode && !isEditing && (
+                        <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+                             <EditButtonComponent onClick={() => setIsEditing(true)} />
+                        </div>
+                    )}
+
+                    <h3 className="font-bold text-lg text-stone-700 mx-auto">{isDogMode?'Fiche Chien':(editId?'Modifier Réservation':'Nouvelle Réservation')}</h3>
+                    
+                    <button onClick={()=>setModal(false) & setIsEditing(false)} className="text-stone-500 font-bold">✕</button>
+
+                </div><div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    
+                    {/* SECTION CHIEN */}
+                    <div className="flex gap-4 items-center">
+                        <div className="relative w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-stone-200 shrink-0">
+                            {form.photo ? <img src={form.photo} className="w-full h-full object-cover"/> : <span className="text-2xl text-stone-300">📷</span>}
+                            <input type="file" onChange={onPhoto} className="absolute inset-0 opacity-0" disabled={!isEditing && editId}/>
+                        </div>
+                        <div className="flex-1">
+                            
+                            {/* Autocomplétion Chien Existant + Bouton Carnet */}
+                            {!isDogMode && (
+                                <div className="flex items-center gap-2 mb-2">
+                                    <input 
+                                        className="flex-1 p-2 rounded-lg bg-stone-100 text-xs border border-stone-200 focus:ring-rose-200 outline-none text-stone-600" 
+                                        list="dogs-list" 
+                                        placeholder="Commencer à taper le nom du chien..."
+                                        onChange={e => {
+                                            const name = e.target.value;
+                                            setForm({...form, dogName: name});
+                                            const d = dogs.find(x => x.name.toLowerCase() === name.toLowerCase()); 
+                                            if(d) selectDogFromPicker(d); 
+                                        }}
+                                        value={form.dogName}
+                                        disabled={!isEditing && editId}
+                                    />
+                                    <datalist id="dogs-list">
+                                        {dogs.map(d=><option key={d.id} value={d.name}></option>)}
+                                    </datalist>
+                                    <OpenDirectoryButton onOpen={openDogPicker} isEditing={isEditing} />
+                                </div>
+                            )}
+                            
+                            {/* Nom du chien (Champ Principal) */}
+                            { (editId || isDogMode) && 
+                                <input className={S.input} value={form.dogName||''} onChange={e=>setForm({...form, dogName:e.target.value})} placeholder="Nom Chien" disabled={!isEditing}/>
+                            }
+                            <input className={S.input} value={form.breed||''} onChange={e=>setForm({...form, breed:e.target.value})} placeholder="Race" disabled={!isEditing}/>
+                            <GenderSwitchComponent form={form} setForm={setForm} isEditing={isEditing} />
+                        </div>
+                    </div>
+                    
+                    {/* SECTION RÉSERVATION */}
+                    {!isDogMode && (<div>
+                        <div onClick={isEditing ? openRange : null} 
+                             className={`bg-rose-50 p-4 rounded-2xl border border-rose-100 flex justify-between items-center ${isEditing ? 'cursor-pointer active:bg-rose-100' : 'cursor-default'} transition mb-2`}>
+                            <div>
+                                <div className="text-xs font-bold text-rose-400 uppercase mb-1">Séjour</div>
+                                <div className="font-bold text-stone-700 text-lg leading-tight">
+                                    {form.start ? new Date(form.start).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Arrivée'} ➝ {form.end ? new Date(form.end).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Départ'}
+                                </div>
+                            </div>
+                            {isEditing && <i className="fas fa-calendar-alt text-rose-300 text-2xl"></i>}
+                        </div>
+                        
+                        {/* Option Provisoire */}
+                        <div className="flex items-center gap-4 mb-2">
+                             <div className="flex items-center gap-2">
+                                <input 
+                                    type="checkbox" 
+                                    checked={form.isAllDay} 
+                                    onChange={(e) => isEditing && setForm({...form, isAllDay: e.target.checked})} 
+                                    className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500"
+                                    disabled={!isEditing}
+                                />
+                                <label className="text-sm font-medium text-stone-700">Journée entière</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input 
+                                    type="checkbox" 
+                                    checked={form.isProvisional} 
+                                    onChange={(e) => isEditing && setForm({...form, isProvisional: e.target.checked})} 
+                                    className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500"
+                                    disabled={!isEditing}
+                                />
+                                <label className="text-sm font-medium text-stone-700">Provisoire</label>
+                            </div>
+                        </div>
+                        
+                        {!form.isAllDay && (<div className="flex gap-2 mt-2 mb-4"><div className="flex-1"><label className={S.label}>Heure Arrivée</label><input type="time" className={S.input} value={form.startTime||''} onChange={e=>setForm({...form, startTime:e.target.value})} disabled={!isEditing}/></div><div className="flex-1"><label className={S.label}>Heure Départ</label><input type="time" className={S.input} value={form.endTime||''} onChange={e=>setForm({...form, endTime:e.target.value})} disabled={!isEditing}/></div></div>)}
+                        <label className={S.label}>SOURCE</label><input className={S.input} list="sources" value={form.source||''} onChange={e=>setForm({...form, source:e.target.value})} placeholder="ex: Rover, Fidélisé..." disabled={!isEditing}/><datalist id="sources"><option value="Le Bon Coin"/><option value="Rover"/><option value="Animaute"/><option value="Fidélisé"/><option value="Bouche à oreille"/></datalist></div>)}
+                        
+                        {/* SECTION PROPRIÉTAIRE/NOTES/PAIEMENT */}
+                        <input className={S.input} value={form.ownerName||''} onChange={e=>setForm({...form, ownerName:e.target.value})} placeholder="Propriétaire" disabled={!isEditing}/>
+                        <input className={S.input} type="tel" value={form.phone||''} onChange={e=>setForm({...form, phone:e.target.value})} placeholder="Téléphone" disabled={!isEditing}/>
+                        
+                        {!isDogMode && (<div>
+                            <div className="flex gap-2 mb-2"><div className="flex-1"><label className={S.label}>PRIX TOTAL</label><input type="number" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})} placeholder="€" disabled={!isEditing || form.paymentStatus === 'appointment'} className={S.input} /></div><div className="flex-1"><label className={S.label}>PAIEMENT</label><select className={S.input} value={form.paymentStatus||'pending'} onChange={e=>setForm({...form, paymentStatus:e.target.value, price: e.target.value === 'appointment' ? '0' : form.price, deposit: e.target.value === 'appointment' ? '' : form.deposit })} disabled={!isEditing}><option value="pending">🔴 À Payer</option><option value="deposit">🟠 Acompte</option><option value="paid">🟢 Payé</option><option value="appointment">🗓️ RDV</option></select></div></div>{form.paymentStatus === 'deposit' && (<div className="bg-orange-50 p-2 rounded-lg border border-orange-100 flex items-center gap-2 mb-2"><input className="w-20 p-1 text-sm border rounded" type="number" placeholder="Reçu" value={form.deposit||''} onChange={e=>setForm({...form, deposit:e.target.value})} disabled={!isEditing}/><span className="text-xs text-orange-800 font-bold">€ reçu. Reste : <span className="text-lg">{(form.price||0) - (form.deposit||0)} €</span></span></div>)}</div>)}
+                        
+                        <textarea className={`${S.input} h-24`} value={form.notes||''} onChange={e=>setForm({...form, notes:e.target.value})} placeholder="Notes..." disabled={!isEditing}/>
+                    
+                    </div>
+                    <div className="p-4 bg-white border-t flex gap-2">
+                        {isEditing && <button onClick={save} className={S.btn}>Valider</button>}
+                        {(editId||isDogMode) && isEditing && <button onClick={remove} className="text-red-400 font-bold px-4 mt-4">Supprimer</button>}
+                    </div>
+
+                </div></div>
             )}
             {fullImg && <div className={S.overlay} onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
         </div>
