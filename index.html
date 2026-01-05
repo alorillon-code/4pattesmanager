@@ -49,18 +49,17 @@
     .stats-dot.active { background-color: #fb7185; border-color: #fb7185; width: 12px; height: 12px; }
     .stats-dot.inactive { background-color: #e7e5e4; }
     .month-picker-trigger { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 50; cursor: pointer; }
-    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-    .splash-fade { animation: fadeOut 0.5s ease-out forwards; }
     
-    /* LOGIN GOOGLE */
+    /* LOGIN / LOADING */
     .login-screen { position: fixed; inset: 0; z-index: 200; background-color: #fafaf9; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
     .google-btn { background-color: white; color: #44403c; border: 1px solid #e7e5e4; padding: 12px 24px; border-radius: 12px; font-weight: bold; display: flex; items-center; gap: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); margin-top: 20px; transition: transform 0.1s; cursor: pointer; }
     .google-btn:active { transform: scale(0.95); }
 
+    /* Z-INDEX LAYERS */
     .overlay-base { position: fixed; inset: 0; display: flex; justify-content: center; items-end; sm:items-center; backdrop-filter: blur(4px); }
     .modal-reservation { z-index: 60; background-color: rgba(28, 25, 23, 0.5); }
-    .modal-picker { z-index: 100; background-color: #fafaf9; } /* Picker au dessus */
     .modal-history { z-index: 80; background-color: rgba(28, 25, 23, 0.5); }
+    .modal-picker { z-index: 100; background-color: #fafaf9; } /* TOP PRIORITY */
 </style>
 </head>
 <body>
@@ -69,7 +68,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getAuth, signInWithRedirect, GoogleAuthProvider, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithRedirect, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // ⬇️ --- VOS CLÉS FIREBASE ICI --- ⬇️
 const firebaseConfig = {
@@ -90,6 +89,7 @@ try {
     
     // EXPOSITION GLOBALE
     window.signInWithRedirect = signInWithRedirect;
+    window.signInWithPopup = signInWithPopup; 
     window.signOut = signOut;
     window.onAuthStateChanged = onAuthStateChanged;
     window.getRedirectResult = getRedirectResult;
@@ -332,6 +332,7 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
 function App() {
     const [splash, setSplash] = useState(true);
     const [user, setUser] = useState(null); // GOOGLE USER
+    const [loadingAuth, setLoadingAuth] = useState(true); // Loading State for Auth
 
     // ⬇️ LISTE BLANCHE EMAILS AUTORISES (VOTRE EMAIL + CELUI DE VOTRE FEMME)
     const ALLOWED_EMAILS = ["a.lorillon@gmail.com", "g.lorillon16@gmail.com"]; 
@@ -375,12 +376,14 @@ function App() {
     // --- AUTH & DATA LOADING ---
     useEffect(() => {
         const timer = setTimeout(() => setSplash(false), 2000);
+        
         // Écouteur d'état Auth
         const unsub = window.onAuthStateChanged(window.auth, async (u) => {
             if (u) {
                 // VÉRIFICATION DE LA LISTE BLANCHE
                 if (ALLOWED_EMAILS.includes(u.email)) {
                     setUser(u);
+                    setLoadingAuth(false);
                     // Vérifier le retour de redirection pour éviter la boucle
                     try {
                         const result = await window.getRedirectResult(window.auth);
@@ -399,18 +402,35 @@ function App() {
                     }, 500);
                 } else {
                     // EMAIL NON AUTORISÉ
+                    console.error("Email non autorisé:", u.email);
                     alert("Accès refusé. Cet email n'est pas autorisé.");
                     await window.signOut(window.auth);
                     setUser(null);
+                    setLoadingAuth(false);
                 }
             } else {
                 setUser(null);
+                setLoadingAuth(false);
             }
         });
         return () => { clearTimeout(timer); unsub(); };
     }, []);
 
-    const login = async () => { try { await window.signInWithRedirect(window.auth, window.googleProvider); } catch (e) { alert("Erreur connexion: " + e.message); } };
+    const login = async () => { 
+        setLoadingAuth(true); // Activer le chargement
+        try { 
+            // DÉTECTION MOBILE vs DESKTOP pour choisir la méthode
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            if (isMobile) {
+                 await window.signInWithRedirect(window.auth, window.googleProvider); 
+            } else {
+                 await window.signInWithPopup(window.auth, window.googleProvider); 
+            }
+        } catch (e) { 
+            alert("Erreur connexion: " + e.message); 
+            setLoadingAuth(false); 
+        } 
+    };
 
     const openForm = (type, data = {}) => {
         pushHistory(); setEditId(data.id || null); setIsDogMode(type === 'dog');
@@ -427,10 +447,10 @@ function App() {
     const save = async () => { if (!window.fire) return alert("Firebase HS"); try { const { addDoc, updateDoc, doc, collection } = window.fire; const db = window.db; let dId = form.dogId; const clean = (val) => val === undefined || val === null ? "" : val; const newColor = internalGetGenderColor(form.gender, dId); const dogData = { name: clean(form.dogName)||"Inconnu", breed: clean(form.breed), owner: clean(form.ownerName), phone: clean(form.phone), notes: clean(form.notes), photo: form.photo||null, color: newColor, gender: form.gender }; if (dId) { const oldDog = dogs.find(d => d.id === dId); await logAction("MODIFICATION", oldDog, "dogs", dId); await updateDoc(doc(db, "dogs", dId), dogData); } else { const ref = await addDoc(collection(db, "dogs"), {...dogData}); dId = ref.id; await logAction("CRÉATION", dogData, "dogs", dId); } if (!isDogMode) { const isAllDay = form.isAllDay; let startDate = clean(form.start) || ''; let endDate = clean(form.end) || ''; if (!startDate || !endDate) { alert("Veuillez sélectionner une période de séjour valide."); return; } if (!isAllDay) { const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate; const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate; startDate = baseStart + 'T' + clean(form.startTime) + ':00'; endDate = baseEnd + 'T' + clean(form.endTime) + ':00'; } else if (startDate.includes('T')) { startDate = startDate.split('T')[0]; endDate = endDate.split('T')[0]; } let price = clean(form.price) || "0"; let deposit = clean(form.deposit) || ""; if (form.paymentStatus === 'appointment') { price = "0"; deposit = ""; } const bookData = { dogId: dId, dogName: clean(form.dogName), breed: clean(form.breed), ownerName: clean(form.ownerName), phone: clean(form.phone), price: price, start: startDate, end: endDate, color: newColor, notes: clean(form.notes), source: clean(form.source), paymentStatus: form.paymentStatus||'pending', deposit: deposit, isAllDay: isAllDay, startTime: clean(form.startTime), endTime: clean(form.endTime), photo: form.photo || null, gender: form.gender, isProvisional: form.isProvisional || false }; if (editId) { const oldBooking = bookings.find(b => b.id === editId); await logAction("MODIFICATION", oldBooking, "bookings", editId); await updateDoc(doc(db, "bookings", editId), bookData); if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) sendMail("MODIFICATION DATES", bookData, oldBooking); } else { const ref = await addDoc(collection(db, "bookings"), bookData); await logAction("CRÉATION", bookData, "bookings", ref.id); sendMail("NOUVELLE RÉSERVATION", bookData); } } setModal(false); setIsEditing(false); } catch (err) { console.error(err); alert("Erreur: "+err.message); } };
     const remove = async () => { if(!confirm("Supprimer ?")) return; const { deleteDoc, doc } = window.fire; const db = window.db; const dataBackup = { ...form }; if (isDogMode) { await deleteDoc(doc(db, "dogs", form.id)); await logAction("SUPPRESSION", dataBackup, "dogs", form.id); setSelectedDog(null); } else { await deleteDoc(doc(db, "bookings", editId)); await logAction("SUPPRESSION", dataBackup, "bookings", editId); sendMail("SUPPRESSION", dataBackup); } setModal(false); setIsEditing(false); };
 
-    if (splash) return ( 
+    if (splash || loadingAuth) return ( 
         <div className="fixed inset-0 z-[100] bg-[#fafaf9] flex flex-col items-center justify-center">
             <img src="logo.png" className="w-32 h-32 rounded-3xl shadow-2xl mb-6 object-cover border-4 border-white" />
-            <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou,<br/>je t'aime</h1>
+            <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou<br/>Je t'aime</h1>
             <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center">4 Pattes Manager</div> 
         </div>
     );
@@ -462,26 +482,19 @@ function App() {
             
             {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
             
+            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) - PLACÉ À LA FIN POUR ÊTRE SÛR */}
+            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
+
             {/* 📋 MODAL DE DÉTAIL HISTORIQUE (Z-INDEX 80) */}
             <HistoryDetailModal item={historyDetail} onClose={() => setHistoryDetail(null)} onRestore={restoreData} dogs={dogs} bookings={bookings} />
 
-            
             {modal && (
                 <div className="overlay-base modal-reservation"><div className={S.modal}><div className={S.modalHead}>
-                    
                     {/* BOUTON ÉDITION DÉPLACÉ AU CENTRE GAUCHE */}
-                    {editId && !isDogMode && !isEditing && (
-                        <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                             <EditButtonComponent onClick={() => setIsEditing(true)} />
-                        </div>
-                    )}
-
+                    {editId && !isDogMode && !isEditing && ( <div className="absolute left-4 top-1/2 transform -translate-y-1/2"> <EditButtonComponent onClick={() => setIsEditing(true)} /> </div> )}
                     <h3 className="font-bold text-lg text-stone-700 mx-auto">{isDogMode?'Fiche Chien':(editId?'Modifier Réservation':'Nouvelle Réservation')}</h3>
-                    
                     <button onClick={()=>setModal(false) & setIsEditing(false)} className="text-stone-500 font-bold">✕</button>
-
                 </div><div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    
                     {/* SECTION CHIEN */}
                     <div className="flex gap-4 items-center">
                         <div className="relative w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-stone-200 shrink-0">
@@ -489,99 +502,28 @@ function App() {
                             <input type="file" onChange={onPhoto} className="absolute inset-0 opacity-0" disabled={!isEditing && editId}/>
                         </div>
                         <div className="flex-1">
-                            
-                            {/* Autocomplétion Chien Existant + Bouton Carnet */}
-                            {!isDogMode && (
-                                <div className="flex items-center gap-2 mb-2">
-                                    <input 
-                                        className="flex-1 p-2 rounded-lg bg-stone-100 text-xs border border-stone-200 focus:ring-rose-200 outline-none text-stone-600" 
-                                        list="dogs-list" 
-                                        placeholder="Commencer à taper le nom du chien..."
-                                        onChange={e => {
-                                            const name = e.target.value;
-                                            setForm({...form, dogName: name});
-                                            const d = dogs.find(x => x.name.toLowerCase() === name.toLowerCase()); 
-                                            if(d) selectDogFromPicker(d); 
-                                        }}
-                                        value={form.dogName}
-                                        disabled={!isEditing && editId}
-                                    />
-                                    <datalist id="dogs-list">
-                                        {dogs.map(d=><option key={d.id} value={d.name}></option>)}
-                                    </datalist>
-                                    <OpenDirectoryButton onOpen={openDogPicker} isEditing={isEditing} />
-                                </div>
-                            )}
-                            
-                            {/* Nom du chien (Champ Principal) */}
-                            { (editId || isDogMode) && 
-                                <input className={S.input} value={form.dogName||''} onChange={e=>setForm({...form, dogName:e.target.value})} placeholder="Nom Chien" disabled={!isEditing}/>
-                            }
+                            {!isDogMode && ( <div className="flex items-center gap-2 mb-2"><input className="flex-1 p-2 rounded-lg bg-stone-100 text-xs border border-stone-200 focus:ring-rose-200 outline-none text-stone-600" list="dogs-list" placeholder="Commencer à taper le nom du chien..." onChange={e => { const name = e.target.value; setForm({...form, dogName: name}); const d = dogs.find(x => x.name.toLowerCase() === name.toLowerCase()); if(d) selectDogFromPicker(d); }} value={form.dogName} disabled={!isEditing && editId} /> <datalist id="dogs-list">{dogs.map(d=><option key={d.id} value={d.name}></option>)}</datalist> <OpenDirectoryButton onOpen={openDogPicker} isEditing={isEditing} /> </div> )}
+                            { (editId || isDogMode) && <input className={S.input} value={form.dogName||''} onChange={e=>setForm({...form, dogName:e.target.value})} placeholder="Nom Chien" disabled={!isEditing}/> }
                             <input className={S.input} value={form.breed||''} onChange={e=>setForm({...form, breed:e.target.value})} placeholder="Race" disabled={!isEditing}/>
                             <GenderSwitchComponent form={form} setForm={setForm} isEditing={isEditing} />
                         </div>
                     </div>
-                    
                     {/* SECTION RÉSERVATION */}
                     {!isDogMode && (<div>
-                        <div onClick={isEditing ? openRange : null} 
-                             className={`bg-rose-50 p-4 rounded-2xl border border-rose-100 flex justify-between items-center ${isEditing ? 'cursor-pointer active:bg-rose-100' : 'cursor-default'} transition mb-2`}>
-                            <div>
-                                <div className="text-xs font-bold text-rose-400 uppercase mb-1">Séjour</div>
-                                <div className="font-bold text-stone-700 text-lg leading-tight">
-                                    {form.start ? new Date(form.start).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Arrivée'} ➝ {form.end ? new Date(form.end).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Départ'}
-                                </div>
-                            </div>
-                            {isEditing && <i className="fas fa-calendar-alt text-rose-300 text-2xl"></i>}
-                        </div>
-                        
-                        {/* Option Provisoire */}
+                        <div onClick={isEditing ? openRange : null} className={`bg-rose-50 p-4 rounded-2xl border border-rose-100 flex justify-between items-center ${isEditing ? 'cursor-pointer active:bg-rose-100' : 'cursor-default'} transition mb-2`}><div><div className="text-xs font-bold text-rose-400 uppercase mb-1">Séjour</div><div className="font-bold text-stone-700 text-lg leading-tight">{form.start ? new Date(form.start).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Arrivée'} ➝ {form.end ? new Date(form.end).toLocaleDateString(undefined, {day:'numeric', month:'short'}) : 'Départ'}</div></div>{isEditing && <i className="fas fa-calendar-alt text-rose-300 text-2xl"></i>}</div>
                         <div className="flex items-center gap-4 mb-2">
-                             <div className="flex items-center gap-2">
-                                <input 
-                                    type="checkbox" 
-                                    checked={form.isAllDay} 
-                                    onChange={(e) => isEditing && setForm({...form, isAllDay: e.target.checked})} 
-                                    className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500"
-                                    disabled={!isEditing}
-                                />
-                                <label className="text-sm font-medium text-stone-700">Journée entière</label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input 
-                                    type="checkbox" 
-                                    checked={form.isProvisional} 
-                                    onChange={(e) => isEditing && setForm({...form, isProvisional: e.target.checked})} 
-                                    className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500"
-                                    disabled={!isEditing}
-                                />
-                                <label className="text-sm font-medium text-stone-700">Provisoire</label>
-                            </div>
+                             <div className="flex items-center gap-2"><input type="checkbox" checked={form.isAllDay} onChange={(e) => isEditing && setForm({...form, isAllDay: e.target.checked})} className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500" disabled={!isEditing} /> <label className="text-sm font-medium text-stone-700">Journée entière</label></div>
+                             <div className="flex items-center gap-2"><input type="checkbox" checked={form.isProvisional} onChange={(e) => isEditing && setForm({...form, isProvisional: e.target.checked})} className="w-4 h-4 text-rose-600 bg-gray-100 border-gray-300 rounded focus:ring-rose-500" disabled={!isEditing} /> <label className="text-sm font-medium text-stone-700">Provisoire</label></div>
                         </div>
-                        
                         {!form.isAllDay && (<div className="flex gap-2 mt-2 mb-4"><div className="flex-1"><label className={S.label}>Heure Arrivée</label><input type="time" className={S.input} value={form.startTime||''} onChange={e=>setForm({...form, startTime:e.target.value})} disabled={!isEditing}/></div><div className="flex-1"><label className={S.label}>Heure Départ</label><input type="time" className={S.input} value={form.endTime||''} onChange={e=>setForm({...form, endTime:e.target.value})} disabled={!isEditing}/></div></div>)}
                         <label className={S.label}>SOURCE</label><input className={S.input} list="sources" value={form.source||''} onChange={e=>setForm({...form, source:e.target.value})} placeholder="ex: Rover, Fidélisé..." disabled={!isEditing}/><datalist id="sources"><option value="Le Bon Coin"/><option value="Rover"/><option value="Animaute"/><option value="Fidélisé"/><option value="Bouche à oreille"/></datalist></div>)}
-                        
                         {/* SECTION PROPRIÉTAIRE/NOTES/PAIEMENT */}
                         <input className={S.input} value={form.ownerName||''} onChange={e=>setForm({...form, ownerName:e.target.value})} placeholder="Propriétaire" disabled={!isEditing}/>
                         <input className={S.input} type="tel" value={form.phone||''} onChange={e=>setForm({...form, phone:e.target.value})} placeholder="Téléphone" disabled={!isEditing}/>
-                        
-                        {!isDogMode && (<div>
-                            <div className="flex gap-2 mb-2"><div className="flex-1"><label className={S.label}>PRIX TOTAL</label><input type="number" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})} placeholder="€" disabled={!isEditing || form.paymentStatus === 'appointment'} className={S.input} /></div><div className="flex-1"><label className={S.label}>PAIEMENT</label><select className={S.input} value={form.paymentStatus||'pending'} onChange={e=>setForm({...form, paymentStatus:e.target.value, price: e.target.value === 'appointment' ? '0' : form.price, deposit: e.target.value === 'appointment' ? '' : form.deposit })} disabled={!isEditing}><option value="pending">🔴 À Payer</option><option value="deposit">🟠 Acompte</option><option value="paid">🟢 Payé</option><option value="appointment">🗓️ RDV</option></select></div></div>{form.paymentStatus === 'deposit' && (<div className="bg-orange-50 p-2 rounded-lg border border-orange-100 flex items-center gap-2 mb-2"><input className="w-20 p-1 text-sm border rounded" type="number" placeholder="Reçu" value={form.deposit||''} onChange={e=>setForm({...form, deposit:e.target.value})} disabled={!isEditing}/><span className="text-xs text-orange-800 font-bold">€ reçu. Reste : <span className="text-lg">{(form.price||0) - (form.deposit||0)} €</span></span></div>)}</div>)}
-                        
+                        {!isDogMode && (<div><div className="flex gap-2 mb-2"><div className="flex-1"><label className={S.label}>PRIX TOTAL</label><input type="number" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})} placeholder="€" disabled={!isEditing || form.paymentStatus === 'appointment'} className={S.input} /></div><div className="flex-1"><label className={S.label}>PAIEMENT</label><select className={S.input} value={form.paymentStatus||'pending'} onChange={e=>setForm({...form, paymentStatus:e.target.value, price: e.target.value === 'appointment' ? '0' : form.price, deposit: e.target.value === 'appointment' ? '' : form.deposit })} disabled={!isEditing}><option value="pending">🔴 À Payer</option><option value="deposit">🟠 Acompte</option><option value="paid">🟢 Payé</option><option value="appointment">🗓️ RDV</option></select></div></div>{form.paymentStatus === 'deposit' && (<div className="bg-orange-50 p-2 rounded-lg border border-orange-100 flex items-center gap-2 mb-2"><input className="w-20 p-1 text-sm border rounded" type="number" placeholder="Reçu" value={form.deposit||''} onChange={e=>setForm({...form, deposit:e.target.value})} disabled={!isEditing}/><span className="text-xs text-orange-800 font-bold">€ reçu. Reste : <span className="text-lg">{(form.price||0) - (form.deposit||0)} €</span></span></div>)}</div>)}
                         <textarea className={`${S.input} h-24`} value={form.notes||''} onChange={e=>setForm({...form, notes:e.target.value})} placeholder="Notes..." disabled={!isEditing}/>
-                    
-                    </div>
-                    <div className="p-4 bg-white border-t flex gap-2">
-                        {isEditing && <button onClick={save} className={S.btn}>Valider</button>}
-                        {(editId||isDogMode) && isEditing && <button onClick={remove} className="text-red-400 font-bold px-4 mt-4">Supprimer</button>}
-                    </div>
-
-                </div></div>
+                    </div><div className="p-4 bg-white border-t flex gap-2">{isEditing && <button onClick={save} className={S.btn}>Valider</button>}{(editId||isDogMode) && isEditing && <button onClick={remove} className="text-red-400 font-bold px-4 mt-4">Supprimer</button>}</div></div></div>
             )}
-            
-            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) - PLACÉ À LA FIN POUR ÊTRE SÛR */}
-            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
 
             {fullImg && <div className="overlay-base z-[120]" onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
         </div>
