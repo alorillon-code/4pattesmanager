@@ -69,8 +69,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-// IMPORT DE signInWithRedirect AU LIEU DE signInWithPopup
-import { getAuth, signInWithRedirect, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithRedirect, GoogleAuthProvider, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // ⬇️ --- VOS CLÉS FIREBASE ICI --- ⬇️
 const firebaseConfig = {
@@ -89,10 +88,11 @@ try {
     window.auth = getAuth(app); 
     window.googleProvider = new GoogleAuthProvider();
     
-    // EXPOSITION GLOBALE DES FONCTIONS AUTH
-    window.signInWithRedirect = signInWithRedirect; // CHANGEMENT ICI
+    // EXPOSITION GLOBALE
+    window.signInWithRedirect = signInWithRedirect;
     window.signOut = signOut;
     window.onAuthStateChanged = onAuthStateChanged;
+    window.getRedirectResult = getRedirectResult;
 
     window.fire = { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy, getFirestore }; 
 } catch(e) { console.error(e); alert("Erreur Config Firebase"); }
@@ -333,6 +333,9 @@ function App() {
     const [splash, setSplash] = useState(true);
     const [user, setUser] = useState(null); // GOOGLE USER
 
+    // ⬇️ LISTE BLANCHE EMAILS AUTORISES (VOTRE EMAIL + CELUI DE VOTRE FEMME)
+    const ALLOWED_EMAILS = ["a.lorillon@gmail.com", "g.lorillon16@gmail.com"]; 
+
     const [view, setView] = useState('calendar');
     const [bookings, setBookings] = useState([]);
     const [dogs, setDogs] = useState([]);
@@ -373,18 +376,35 @@ function App() {
     useEffect(() => {
         const timer = setTimeout(() => setSplash(false), 2000);
         // Écouteur d'état Auth
-        const unsub = window.onAuthStateChanged(window.auth, (u) => {
-            setUser(u);
+        const unsub = window.onAuthStateChanged(window.auth, async (u) => {
             if (u) {
-                // Chargement des données si connecté
-                setTimeout(() => {
-                    if (!window.fire) return;
-                    const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db;
-                    onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
-                    onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
-                    const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
-                    onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()}))));
-                }, 500);
+                // VÉRIFICATION DE LA LISTE BLANCHE
+                if (ALLOWED_EMAILS.includes(u.email)) {
+                    setUser(u);
+                    // Vérifier le retour de redirection pour éviter la boucle
+                    try {
+                        const result = await window.getRedirectResult(window.auth);
+                    } catch (error) {
+                        console.error("Redirect Error", error);
+                    }
+
+                    // Chargement des données si connecté
+                    setTimeout(() => {
+                        if (!window.fire) return;
+                        const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db;
+                        onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
+                        onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
+                        const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
+                        onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()}))));
+                    }, 500);
+                } else {
+                    // EMAIL NON AUTORISÉ
+                    alert("Accès refusé. Cet email n'est pas autorisé.");
+                    await window.signOut(window.auth);
+                    setUser(null);
+                }
+            } else {
+                setUser(null);
             }
         });
         return () => { clearTimeout(timer); unsub(); };
@@ -410,7 +430,7 @@ function App() {
     if (splash) return ( 
         <div className="fixed inset-0 z-[100] bg-[#fafaf9] flex flex-col items-center justify-center">
             <img src="logo.png" className="w-32 h-32 rounded-3xl shadow-2xl mb-6 object-cover border-4 border-white" />
-            <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou<br />Je t'aime</h1>
+            <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou,<br/>je t'aime</h1>
             <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center">4 Pattes Manager</div> 
         </div>
     );
@@ -441,9 +461,6 @@ function App() {
             </div>
             
             {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
-            
-            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) - PLACÉ À LA FIN */}
-            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
             
             {/* 📋 MODAL DE DÉTAIL HISTORIQUE (Z-INDEX 80) */}
             <HistoryDetailModal item={historyDetail} onClose={() => setHistoryDetail(null)} onRestore={restoreData} dogs={dogs} bookings={bookings} />
@@ -562,6 +579,10 @@ function App() {
 
                 </div></div>
             )}
+            
+            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) - PLACÉ À LA FIN POUR ÊTRE SÛR */}
+            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
+
             {fullImg && <div className="overlay-base z-[120]" onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
         </div>
     );
