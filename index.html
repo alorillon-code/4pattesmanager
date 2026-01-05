@@ -9,8 +9,7 @@
 <link rel="apple-touch-icon" href="logo.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#fafaf9">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes"> <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -32,17 +31,11 @@
     .snap-container { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; height: 100%; width: 100%; -webkit-overflow-scrolling: touch; }
     .snap-page { flex: 0 0 100%; width: 100vw; scroll-snap-align: start; padding: 1rem; overflow-y: auto; padding-bottom: 150px; }
 
-    /* GRILLE CALENDRIER ROBUSTE */
     .calendar-week { display: flex; width: 100%; border-bottom: 1px solid #e7e5e4; min-height: 50px; position: relative; }
     .calendar-day { width: 14.2857%; border-right: 1px solid #e7e5e4; position: relative; height: 100%; min-height: 50px; z-index: 1; }
-
-    /* TAMPON PATTE */
     .paw-stamp { position: absolute; top: 4px; right: 4px; font-size: 2.5rem; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; color: #fb7185; opacity: 0.4; transform: rotate(15deg); z-index: 1; pointer-events: none; }
-
-    /* HACHURES PROVISOIRES */
     .provisional { background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0.4) 5px, transparent 5px, transparent 10px); background-size: 10px 10px; opacity: 1 !important; }
 
-    /* SWITCH GENDER */
     .gender-select { display: flex; justify-content: space-between; align-items: center; border-radius: 8px; border: 1px solid #e7e5e4; background-color: #fff; overflow: hidden; margin-top: 10px; width: 100%; max-width: 240px; }
     .gender-btn { flex: 1; padding: 8px 0; text-align: center; font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; border-right: 1px solid #e7e5e4; }
     .gender-btn:last-child { border-right: none; }
@@ -58,7 +51,11 @@
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
     .splash-fade { animation: fadeOut 0.5s ease-out forwards; }
     
-    /* STYLES MODALES Z-INDEX */
+    /* LOGIN GOOGLE */
+    .login-screen { position: fixed; inset: 0; z-index: 200; background-color: #fafaf9; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+    .google-btn { background-color: white; color: #44403c; border: 1px solid #e7e5e4; padding: 12px 24px; border-radius: 12px; font-weight: bold; display: flex; items-center; gap: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); margin-top: 20px; transition: transform 0.1s; cursor: pointer; }
+    .google-btn:active { transform: scale(0.95); }
+
     .overlay-base { position: fixed; inset: 0; display: flex; justify-content: center; items-end; sm:items-center; backdrop-filter: blur(4px); }
     .modal-reservation { z-index: 60; background-color: rgba(28, 25, 23, 0.5); }
     .modal-picker { z-index: 100; background-color: #fafaf9; } /* Picker au dessus */
@@ -71,6 +68,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // ⬇️ --- VOS CLÉS FIREBASE ICI --- ⬇️
 const firebaseConfig = {
@@ -86,6 +84,14 @@ const firebaseConfig = {
 try {
     const app = initializeApp(firebaseConfig);
     window.db = getFirestore(app);
+    window.auth = getAuth(app); 
+    window.googleProvider = new GoogleAuthProvider();
+    
+    // EXPOSITION GLOBALE DES FONCTIONS AUTH (CORRECTION)
+    window.signInWithPopup = signInWithPopup;
+    window.signOut = signOut;
+    window.onAuthStateChanged = onAuthStateChanged;
+
     window.fire = { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy, getFirestore }; 
 } catch(e) { console.error(e); alert("Erreur Config Firebase"); }
 </script>
@@ -115,14 +121,15 @@ const S = {
     input: "w-full border border-stone-200 rounded-xl p-3 mt-1 bg-white focus:ring-2 focus:ring-rose-200 outline-none text-stone-600",
     label: "text-xs font-bold text-stone-400 uppercase mt-3 block tracking-wide",
     btn: "bg-rose-400 text-white font-bold py-3 rounded-xl w-full shadow-lg shadow-rose-100 mt-4 active:scale-[0.98] transition-transform",
+    statCard: "bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex flex-col justify-center",
+    statTitle: "text-stone-400 text-xs uppercase font-bold tracking-widest",
     card: "bg-white p-3 rounded-xl shadow-sm mb-2 flex items-center gap-4 border border-stone-100 active:scale-[0.99] transition-transform cursor-pointer",
     avatar: "w-10 h-10 rounded-full object-cover border border-stone-200 bg-stone-100 flex items-center justify-center text-stone-400 font-bold",
     avatarLarge: "w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-stone-100 flex items-center justify-center text-stone-400 text-3xl font-bold",
     rangeOverlay: "fixed inset-0 z-[70] bg-stone-900/50 flex items-center justify-center backdrop-blur-md",
     rangeBox: "bg-white w-10/12 max-w-xs rounded-3xl p-3 shadow-2xl",
     rangeGrid: "grid grid-cols-7 gap-1 p-1",
-    rangeCell: "aspect-square flex items-center justify-center rounded-full text-xs font-bold relative transition-all cursor-pointer",
-    statTitle: "text-stone-400 text-xs uppercase font-bold tracking-widest",
+    rangeCell: "aspect-square flex items-center justify-center rounded-full text-xs font-bold relative transition-all cursor-pointer"
 };
 
 const getGenderColor = (gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_UNKNOWN) => {
@@ -184,6 +191,7 @@ const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
         return String(value);
     };
     const isRestorable = actionType !== 'RESTAURATION';
+
     return (
         <div className="overlay-base modal-history">
             <div className={S.modal} style={{maxHeight: '90vh'}}>
@@ -278,7 +286,9 @@ const Stats = ({ dogs, bookings }) => {
 const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selectedDog }) => {
     const [filter, setFilter] = useState(''); const [directoryMode, setDirectoryMode] = useState('relevance');
     let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))); let dogsUpcoming = [];
-    const openDetail = (d) => { setSelectedDog(d); window.history.pushState({ modal: true }, ''); };
+    
+    // FIX: Fonction d'ouverture simplifiée
+    const handleDogClick = (d) => { setSelectedDog(d); window.history.pushState({ modal: true }, ''); };
 
     if (filter === '' && directoryMode === 'relevance') {
         const today = new Date(); today.setHours(0,0,0,0); const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -308,7 +318,7 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
                 <div className="sticky top-0 bg-stone-50 z-20 pt-1 pb-4"><div className="flex justify-between items-center mb-4"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Rechercher..." className="flex-1 p-3 rounded-xl border border-stone-200 shadow-sm text-stone-600 outline-none placeholder-stone-300" /></div><div className="flex justify-center items-center text-xs font-bold text-stone-500 bg-white rounded-xl shadow-sm border border-stone-200"><button onClick={() => {setDirectoryMode('relevance'); setFilter('');}} className={`flex-1 py-2 rounded-l-xl transition-colors ${directoryMode === 'relevance' ? 'bg-rose-400 text-white' : 'hover:bg-stone-100'}`}>Pertinence</button><button onClick={() => {setDirectoryMode('alphabetical'); setFilter('');}} className={`flex-1 py-2 rounded-r-xl transition-colors ${directoryMode === 'alphabetical' ? 'bg-rose-400 text-white' : 'hover:bg-stone-100'}`}>Alphabétique</button></div></div>
                 {filteredDogs.map((item, index) => {
                     if (item.type === 'header') { const currentDogsUpcoming = dogsUpcoming.filter(d => d.id); return (<div key={item.label} className="text-xs font-bold text-rose-400 mb-2 pl-2 mt-4 sticky top-28 bg-stone-50 z-10">{item.label} {item.label === 'Prochaines Arrivées' && currentDogsUpcoming.length > 0 && currentDogsUpcoming[0].nextArrival && (<span className="text-stone-400 font-normal ml-2 text-[10px]">(Prochaine le {currentDogsUpcoming[0].nextArrival.toLocaleDateString()})</span>)}</div>); } 
-                    else { return ( <div key={item.id} onClick={() => openDetail(item)} className={S.card} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{item.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> ); }
+                    else { return ( <div key={item.id} onClick={() => handleDogClick(item)} className={S.card} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{item.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> ); }
                 })}
             </div>
             {directoryMode === 'alphabetical' && !filter && (<div className="absolute right-1 top-20 bottom-32 w-6 flex flex-col justify-center items-center z-40 text-[10px] font-bold text-rose-400 bg-white/50 rounded-full">{Object.keys(dogs.sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {})).map(l => <div key={l} className="flex-1 w-full flex items-center justify-center" onClick={()=>{document.getElementById(`letter-${l}`).scrollIntoView({behavior:'auto'})}}>{l}</div>)}</div>)}
@@ -316,8 +326,11 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
     );
 };
 
+// --- APP COMPONENT ---
 function App() {
     const [splash, setSplash] = useState(true);
+    const [user, setUser] = useState(null); // GOOGLE USER
+
     const [view, setView] = useState('calendar');
     const [bookings, setBookings] = useState([]);
     const [dogs, setDogs] = useState([]);
@@ -354,17 +367,28 @@ function App() {
     const pushHistory = () => { window.history.pushState({ modal: true }, ''); };
     const openDogPicker = () => { pushHistory(); setIsDogPickerOpen(true); }; 
 
+    // --- AUTH & DATA LOADING ---
     useEffect(() => {
-        const timer = setTimeout(() => setSplash(false), 2000); 
-        setTimeout(() => {
-            if (!window.fire) return;
-            const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db;
-            onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
-            onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
-            const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
-            onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()}))));
-        }, 1000); return () => clearTimeout(timer);
+        const timer = setTimeout(() => setSplash(false), 2000);
+        // Écouteur d'état Auth
+        const unsub = window.onAuthStateChanged(window.auth, (u) => {
+            setUser(u);
+            if (u) {
+                // Chargement des données si connecté
+                setTimeout(() => {
+                    if (!window.fire) return;
+                    const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db;
+                    onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
+                    onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
+                    const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
+                    onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()}))));
+                }, 500);
+            }
+        });
+        return () => { clearTimeout(timer); unsub(); };
     }, []);
+
+    const login = async () => { try { await window.signInWithPopup(window.auth, window.googleProvider); } catch (e) { alert("Erreur connexion: " + e.message); } };
 
     const openForm = (type, data = {}) => {
         pushHistory(); setEditId(data.id || null); setIsDogMode(type === 'dog');
@@ -386,7 +410,14 @@ function App() {
             <img src="logo.png" className="w-32 h-32 rounded-3xl shadow-2xl mb-6 object-cover border-4 border-white" />
             <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou, je t'aime</h1>
             <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center">4 Pattes Manager</div> 
-            <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center"></div> 
+        </div>
+    );
+    
+    if (!user) return (
+        <div className="login-screen">
+             <img src="logo.png" className="w-24 h-24 rounded-3xl shadow-xl mb-6" />
+             <h2 className="text-xl font-bold text-stone-600 mb-4">Connexion Requise</h2>
+             <button onClick={login} className="google-btn"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6"/>Se connecter avec Google</button>
         </div>
     );
 
@@ -409,7 +440,7 @@ function App() {
             
             {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
             
-            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) */}
+            {/* 🐶 MODAL PICKER DU CARNET (Z-INDEX 100) - PLACÉ À LA FIN */}
             <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
             
             {/* 📋 MODAL DE DÉTAIL HISTORIQUE (Z-INDEX 80) */}
