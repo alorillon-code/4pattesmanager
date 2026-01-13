@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>4Pattes Manager (BETA)</title>
+<title>4Pattes Manager</title>
 
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -59,9 +59,30 @@
     .modal-history { z-index: 80; background-color: rgba(28, 25, 23, 0.5); }
     .modal-picker { z-index: 100; background-color: #fafaf9; }
     .modal-gallery { z-index: 110; background-color: #fafaf9; }
+
+    /* ANIMATION TEXTE DEFILANT AGENDA */
+    .marquee-container {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        width: 100%;
+    }
+    .marquee-content {
+        display: inline-block;
+        padding-left: 0;
+    }
+    .animate-marquee {
+        animation: marquee 8s linear infinite alternate;
+    }
+    @keyframes marquee {
+        0% { transform: translateX(0); }
+        20% { transform: translateX(0); }
+        100% { transform: translateX(calc(-100% + 80%)); }
+    }
 </style>
 </head>
 <body>
+
 <div id="root"></div>
 
 <script type="module">
@@ -69,7 +90,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getAuth, signInWithRedirect, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// ⬇️ --- VOS CLÉS FIREBASE INTÉGRÉES --- ⬇️
+// ⬇️ --- VOS CLÉS FIREBASE --- ⬇️
 const firebaseConfig = {
     apiKey: "AIzaSyCSbFnk_MX3Ya-Tf21jy3wigy-bp3lCPjE",
     authDomain: "dogmanager-4747f.firebaseapp.com",
@@ -78,7 +99,7 @@ const firebaseConfig = {
     messagingSenderId: "296838087068",
     appId: "1:296838087068:web:39cae5ef31862bc4938859"
 };
-// ⬆️ ----------------------------------- ⬆️
+// ⬆️ --------------------------- ⬆️
 
 try {
     const app = initializeApp(firebaseConfig);
@@ -97,12 +118,77 @@ try {
 </script>
 
 <script type="text/babel">
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useLayoutEffect } = React;
 
 const COLORS = ['#fecaca', '#fed7aa', '#fef08a', '#bbf7d0', '#a5f3fc', '#bfdbfe', '#ddd6fe', '#f5d0fe', '#e7e5e4', '#cbd5e1', '#fecdd3', '#a7f3d0'];
 const COLORS_MALE = ['#bfdbfe', '#93c5fd', '#60a5fa', '#38bdf8', '#0ea5e9', '#e0f2fe', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9'];
 const COLORS_FEMALE = ['#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777', '#ffe4e6', '#fecdd3', '#fda4af', '#fb7185', '#f43f5e'];
 const COLOR_UNKNOWN = '#a8a29e';
+
+// --- CONFIGURATION EVAL MISE À JOUR ---
+const EVAL_CRITERIA = [
+    { id: 'social', label: 'Sociabilité', options: [
+        { label: 'Un amour', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Craintif', val: 5, class: 'bg-blue-100 text-blue-700 border-blue-200' },
+        { label: 'Sélectif', val: 10, class: 'bg-orange-100 text-orange-700 border-orange-200' },
+        { label: 'Agressif', val: 50, class: 'bg-red-100 text-red-700 border-red-200 font-bold' }
+    ]},
+    { id: 'bark', label: 'Aboiement', options: [
+        { label: 'Calme', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Parfois', val: 5, class: 'bg-blue-100 text-blue-700 border-blue-200' },
+        { label: 'Non-stop', val: 20, class: 'bg-orange-100 text-orange-700 border-orange-200' },
+        { label: 'Hurle', val: 40, class: 'bg-red-100 text-red-700 border-red-200' }
+    ]},
+    { id: 'clean', label: 'Propreté', options: [
+        { label: 'Propre', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Pisse bcp', val: 10, class: 'bg-blue-100 text-blue-700 border-blue-200' }, // Modifié
+        { label: 'Pipi Int.', val: 20, class: 'bg-red-100 text-red-700 border-red-200' }
+    ]},
+    { id: 'housing', label: 'Dedans/Dehors', options: [
+        { label: 'Dehors', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Réclame In', val: 5, class: 'bg-blue-50 text-blue-600 border-blue-100' }, // Modifié
+        { label: 'Dors In', val: 10, class: 'bg-blue-100 text-blue-700 border-blue-200' },
+        { label: 'Tjrs In', val: 20, class: 'bg-indigo-100 text-indigo-700 border-indigo-200' }
+    ]},
+    { id: 'vaccine', label: 'Vaccins', options: [
+        { label: 'À jour', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Pas à jour', val: 5, class: 'bg-red-50 text-red-500 border-red-100' }
+    ]},
+    { id: 'steril', label: 'Stérilisé', options: [
+        { label: 'Oui', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Non', val: 5, class: 'bg-orange-50 text-orange-600 border-orange-100' }
+    ]},
+    { id: 'lonely', label: 'Solitude', options: [
+        { label: 'Accepte', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Collant', val: 10, class: 'bg-orange-100 text-orange-700 border-orange-200' },
+        { label: 'Excessif', val: 20, class: 'bg-red-100 text-red-700 border-red-200' } 
+    ]},
+    { id: 'fugue', label: 'Fugueur', options: [
+        { label: 'Non', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Portail', val: 10, class: 'bg-orange-100 text-orange-700 border-orange-200' },
+        { label: 'Très', val: 40, class: 'bg-red-100 text-red-700 border-red-200' }
+    ]},
+    { id: 'destroy', label: 'Dégâts', options: [
+        { label: 'Non', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Seul', val: 10, class: 'bg-orange-100 text-orange-700 border-orange-200' },
+        { label: 'Toujours', val: 40, class: 'bg-red-100 text-red-700 border-red-200' }
+    ]},
+    { id: 'walk', label: 'Balade', options: [
+        { label: 'Rappel OK', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'S\'éloigne', val: 5, class: 'bg-blue-100 text-blue-700 border-blue-200' },
+        { label: 'Tire', val: 10, class: 'bg-orange-100 text-orange-700 border-orange-200' }
+    ]},
+    { id: 'uska', label: 'Joue avec Uska', options: [
+        { label: 'Énormément', val: 0, class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+        { label: 'Un peu', val: 5, class: 'bg-blue-100 text-blue-700 border-blue-200' },
+        { label: 'Pas du tout', val: 10, class: 'bg-orange-100 text-orange-700 border-orange-200' }
+    ]}
+];
+
+// --- SEUILS AUGMENTÉS ---
+const WARNING_THRESHOLD = 80; // À éviter
+const EXIGENT_THRESHOLD = 25; // Exigeant (>25)
+const BLACKLIST_THRESHOLD = 100;
 
 const S = {
     nav: "fixed bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-stone-200 h-16 z-50 flex justify-between px-6 pb-safe",
@@ -117,7 +203,7 @@ const S = {
     daysHeader: "flex w-full border-b border-stone-100 bg-stone-50 shrink-0 z-10 relative h-8 items-center",
     dayHeaderCell: "flex-1 text-center text-[10px] font-bold text-stone-400 py-2 uppercase tracking-wider",
     modal: "bg-white w-full h-[95vh] rounded-t-3xl flex flex-col overflow-hidden shadow-2xl max-w-md mx-auto",
-    modalHead: "flex justify-between items-center p-4 border-b bg-stone-50 relative",
+    modalHead: "flex justify-between items-center p-4 border-b bg-stone-50 relative shrink-0",
     input: "w-full border border-stone-200 rounded-xl p-3 mt-1 bg-white focus:ring-2 focus:ring-rose-200 outline-none text-stone-600",
     label: "text-xs font-bold text-stone-400 uppercase mt-3 block tracking-wide",
     btn: "bg-rose-400 text-white font-bold py-3 rounded-xl w-full shadow-lg shadow-rose-100 mt-4 active:scale-[0.98] transition-transform",
@@ -139,6 +225,69 @@ const getGenderColor = (gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_U
     if (existingDog && existingDog.color) return existingDog.color;
     const dogsOfSameGender = dogs.filter(d => d.gender === gender);
     return palette[dogsOfSameGender.length % palette.length];
+};
+
+const calculateAge = (birthStr) => {
+    if (!birthStr) return null;
+    let birthDate = null;
+    if (birthStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+        const [d, m, y] = birthStr.split('/');
+        birthDate = new Date(y, m - 1, d);
+    } 
+    else if (birthStr.match(/^\d{1,2}\/\d{4}$/)) {
+        const [m, y] = birthStr.split('/');
+        birthDate = new Date(y, m - 1, 1);
+    } 
+    else if (birthStr.match(/^\d{4}$/)) {
+        birthDate = new Date(birthStr, 0, 1);
+    } else {
+        return null;
+    }
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
+    if (months < 0 || (months === 0 && today.getDate() < birthDate.getDate())) {
+        years--;
+        months += 12;
+    }
+    if (today.getDate() < birthDate.getDate()) {
+        months--;
+    }
+    if (months < 0) { months += 12; }
+    if (years === 0 && months === 0) return "Nouveau né";
+    if (years === 0) return `${months} mois`;
+    if (months === 0) return `${years} ans`;
+    return `${years} ans et ${months} mois`;
+};
+
+const calculateScore = (evalData) => {
+    if (!evalData) return 0;
+    let score = Object.entries(evalData).reduce((sum, [key, val]) => {
+        if (key === 'isBlacklisted' || key === 'blacklistReason') return sum;
+        return sum + (parseInt(val) || 0);
+    }, 0);
+    if (evalData.isBlacklisted) score += 100;
+    return score;
+};
+
+// --- COMPOSANTS AUXILIAIRES ---
+const SmartMarquee = ({ text, className }) => {
+    const textRef = useRef(null);
+    const containerRef = useRef(null);
+    const [shouldScroll, setShouldScroll] = useState(false);
+    useLayoutEffect(() => {
+        if (textRef.current && containerRef.current) {
+            setShouldScroll(textRef.current.offsetWidth > containerRef.current.offsetWidth);
+        }
+    }, [text]);
+    return (
+        <div ref={containerRef} className={`marquee-container ${className}`}>
+            <span ref={textRef} className={`marquee-content ${shouldScroll ? 'animate-marquee' : ''}`}>
+                {text}
+            </span>
+        </div>
+    );
 };
 
 const sendMail = (action, data, oldData = null) => {
@@ -167,6 +316,58 @@ const GenderSwitchComponent = ({ form, setForm, isEditing }) => {
     );
 };
 
+const BehaviorEvaluation = ({ evalData, setForm, isEditing }) => {
+    const updateEval = (criteriaId, val) => {
+        if (!isEditing) return;
+        setForm(prev => ({ ...prev, eval: { ...prev.eval, [criteriaId]: val } }));
+    };
+    const toggleBlacklist = () => {
+        if (!isEditing) return;
+        const newVal = !evalData?.isBlacklisted;
+        setForm(prev => ({ ...prev, eval: { ...prev.eval, isBlacklisted: newVal } }));
+    };
+    const updateBlacklistReason = (txt) => {
+        if (!isEditing) return;
+        setForm(prev => ({ ...prev, eval: { ...prev.eval, blacklistReason: txt } }));
+    };
+    const currentScore = calculateScore(evalData);
+    let scoreColor = 'bg-emerald-100 text-emerald-700';
+    let scoreLabel = 'Facile';
+    if (currentScore >= BLACKLIST_THRESHOLD) { scoreColor = 'bg-stone-800 text-white animate-pulse border-2 border-red-500'; scoreLabel = '⛔ BLACKLIST'; }
+    else if (currentScore >= WARNING_THRESHOLD) { scoreColor = 'bg-red-100 text-red-700 font-bold'; scoreLabel = '⚠️⚠️ À ÉVITER'; }
+    else if (currentScore > EXIGENT_THRESHOLD) { scoreColor = 'bg-orange-100 text-orange-700'; scoreLabel = '⚠️ Exigeant'; }
+    const isBlacklisted = evalData?.isBlacklisted || false;
+    return (
+        <div className="mt-4 mb-4">
+            <div className="flex justify-between items-center mb-2">
+                <label className={S.label}>Évaluation ({currentScore} pts)</label>
+                <span className={`text-[10px] px-3 py-1 rounded-full ${scoreColor} uppercase shadow-sm`}>{scoreLabel}</span>
+            </div>
+            <div className="space-y-3 bg-stone-50 p-3 rounded-xl border border-stone-100 relative">
+                {EVAL_CRITERIA.map(c => {
+                    const currentVal = evalData ? evalData[c.id] : 0;
+                    return (
+                        <div key={c.id} className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-stone-500 w-24">{c.label}</span>
+                            <div className="flex gap-1 flex-1 justify-end flex-wrap">
+                                {c.options.map((opt, i) => {
+                                    const isSelected = currentVal == opt.val; 
+                                    const style = isSelected ? opt.class + ' shadow-sm scale-105' : 'bg-white text-stone-400 border-stone-100 grayscale opacity-70';
+                                    return ( <div key={i} onClick={() => updateEval(c.id, opt.val)} className={`text-[9px] px-2 py-1 rounded-md border transition-all ${style} ${!isEditing ? 'cursor-default' : 'cursor-pointer'}`}>{opt.label}</div> )
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
+                <div className="pt-4 mt-2 border-t border-stone-200">
+                    <button onClick={toggleBlacklist} disabled={!isEditing} className={`w-full py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors ${isBlacklisted ? 'bg-stone-800 text-white hover:bg-stone-700' : 'bg-stone-200 text-stone-500 hover:bg-stone-300'}`}>{isBlacklisted ? <i className="fas fa-ban text-red-500"></i> : <i className="fas fa-ban"></i>}{isBlacklisted ? 'CHIEN BLACKLISTÉ (+100pts)' : 'BLACKLISTER CE CHIEN'}</button>
+                    {isBlacklisted && (<div className="mt-2 animate-fadeIn"><label className="text-[10px] font-bold text-red-500 uppercase block mb-1">Raison du refus</label><input type="text" value={evalData?.blacklistReason || ''} onChange={(e) => updateBlacklistReason(e.target.value)} disabled={!isEditing} className="w-full text-xs p-2 border border-red-200 bg-red-50 rounded-lg text-red-900 placeholder-red-300 focus:ring-red-200" placeholder="Ex: A mordu, détruit..." /></div>)}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const OpenDirectoryButton = ({ onOpen, isEditing }) => ( <button onClick={onOpen} className="w-10 h-10 bg-rose-50 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-100 transition-colors active:scale-95" title="Ouvrir le Carnet" disabled={!isEditing}><i className="fas fa-address-book"></i></button> );
 
 const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
@@ -180,6 +381,7 @@ const HistoryDetailModal = ({ item, onClose, onRestore, dogs, bookings }) => {
         let value = data[key];
         if (key === 'photo') return value ? (value === "Base64 (omitted)" ? 'Image (Omise)' : 'Image (Présente)') : 'N/A';
         if (key === 'gallery') return value ? `Galerie (${value.length} photos)` : '0 photos';
+        if (key === 'eval') return value ? 'Données Eval' : '-';
         if (key === 'start' || key === 'end') return value ? new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
         if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
         if (key === 'deposit' || key === 'price') return value ? `${value} €` : '0 €';
@@ -208,7 +410,6 @@ const DogPickerModal = ({ isOpen, onClose, onSelect, dogs }) => {
     );
 };
 
-// --- GALERIE PHOTO MODAL (SÉCURISÉE) ---
 const GalleryModal = ({ isOpen, onClose, photos, onAdd, onDelete, onView, onSetProfile, isEditing }) => {
     if (!isOpen) return null;
     const fileInputRef = useRef(null);
@@ -224,8 +425,6 @@ const GalleryModal = ({ isOpen, onClose, photos, onAdd, onDelete, onView, onSetP
                         {photos.map((photo, index) => (
                             <div key={index} className="relative aspect-square rounded-xl overflow-hidden shadow-sm border border-stone-200 group">
                                 <img src={photo} className="w-full h-full object-cover cursor-pointer" onClick={() => onView(photo)} />
-                                
-                                {/* ÉLÉMENTS VISIBLES UNIQUEMENT EN MODE ÉDITION */}
                                 {isEditing && (
                                     <>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(index); }} className="absolute top-1 right-1 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md"><i className="fas fa-trash text-xs"></i></button>
@@ -234,7 +433,6 @@ const GalleryModal = ({ isOpen, onClose, photos, onAdd, onDelete, onView, onSetP
                                         )}
                                     </>
                                 )}
-                                
                                 {index === 0 && (
                                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] text-center py-1 font-bold">PROFIL</div>
                                 )}
@@ -263,7 +461,7 @@ const RangePickerModal = ({ isRangeOpen, setIsRangeOpen, rangeSel, setRangeSel, 
     );
 };
 
-const Calendar = ({ date, setDate, openForm, bookings }) => {
+const Calendar = ({ date, setDate, openForm, bookings, dogs }) => {
     const y = date.getFullYear(), m = date.getMonth(); const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1)); let weeks = [], curr = new Date(start);
     for(let w=0; w<6; w++) { let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); } if(w>4 && days[0].getMonth() !== m) break; const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999); const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
         const items = evts.map(ev => { const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1; let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6; return { ...ev, dur, st, en }; });
@@ -272,38 +470,22 @@ const Calendar = ({ date, setDate, openForm, bookings }) => {
     return (
         <div className="flex flex-col h-full overflow-hidden"><div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div><div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>{weeks.map((w,i) => (<div key={i} className="calendar-week" style={{flex:1}}>{w.days.map((d,j) => { const isToday = d.toDateString() === new Date().toDateString(); return <div key={j} className={`calendar-day`} onClick={()=>openForm('new',{date:d.toISOString().split('T')[0]})}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>; })}{w.items.map(ev => {
             const isRDV = ev.paymentStatus === 'appointment';
-            const cellWidth = 14.2857;
-            const gap = cellWidth * 0.10; // 10%
-            let left = ev.st * cellWidth;
-            let width = (ev.en - ev.st + 1) * cellWidth;
-            const segmentStartTs = w.days[ev.st].getTime();
+            const linkedDog = dogs.find(d => d.id === ev.dogId);
+            const score = calculateScore(linkedDog?.eval);
+            let badgeIcon = "";
+            if (score >= BLACKLIST_THRESHOLD) badgeIcon = "⛔ "; 
+            else if (score >= WARNING_THRESHOLD) badgeIcon = "⚠️⚠️ "; 
+            else if (score > EXIGENT_THRESHOLD) badgeIcon = "⚠️ "; 
+            const cellWidth = 14.2857; const gap = cellWidth * 0.10; 
+            let left = ev.st * cellWidth; let width = (ev.en - ev.st + 1) * cellWidth;
             const weekStartLimit = new Date(w.days[0]); weekStartLimit.setHours(0,0,0,0);
             const weekEndLimit = new Date(w.days[6]); weekEndLimit.setHours(23,59,59,999);
-            const realStart = new Date(ev.start);
-            const realEnd = new Date(ev.end);
-            const isRealStart = realStart >= weekStartLimit;
-            const isRealEnd = realEnd <= weekEndLimit;
-
-            if (isRDV) {
-                left += gap;
-                width -= (2 * gap);
-            } else {
-                if (isRealStart) { left += gap; width -= gap; }
-                if (isRealEnd) { width -= gap; }
-            }
-
-            const style = {
-                backgroundColor: isRDV ? '#ffffff' : ev.color,
-                border: isRDV ? `2px solid ${ev.color}` : '1px solid rgba(255,255,255,0.5)',
-                left: `${left}%`,
-                width: `${width}%`,
-                top: `${25 + ev.row*16}px`,
-                opacity: ev.isProvisional ? 1 : 0.8,
-                color: '#44403c',
-                boxShadow: isRDV ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-                zIndex: isRDV ? 20 : 10
-            };
-            return (<div key={ev.id} className={`absolute h-4 rounded-md text-[9px] font-bold px-1 overflow-hidden cursor-pointer shadow-sm flex items-center gap-1 ${ev.isProvisional ? 'provisional' : ''}`} style={style} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}>{ev.paymentStatus === 'appointment' ? <><span className="truncate">{ev.dogName}</span><i className="fas fa-calendar-check text-[9px] ml-1 shrink-0"></i></> : <>{ev.paymentStatus==='pending' && <div className="w-2 h-2 rounded-full bg-red-500 border border-white shrink-0"></div>}{ev.paymentStatus==='deposit' && <div className="w-2 h-2 rounded-full bg-orange-400 border border-white shrink-0"></div>}<span className="truncate">{ev.dogName} <span className="opacity-75 text-[9px]">({ev.dur}j)</span></span></>}</div>);
+            const realStart = new Date(ev.start); const realEnd = new Date(ev.end);
+            const isRealStart = realStart >= weekStartLimit; const isRealEnd = realEnd <= weekEndLimit;
+            if (isRDV) { left += gap; width -= (2 * gap); } else { if (isRealStart) { left += gap; width -= gap; } if (isRealEnd) { width -= gap; } }
+            const style = { backgroundColor: isRDV ? '#ffffff' : ev.color, border: isRDV ? `2px solid ${ev.color}` : '1px solid rgba(255,255,255,0.5)', left: `${left}%`, width: `${width}%`, top: `${25 + ev.row*16}px`, opacity: ev.isProvisional ? 1 : 0.8, color: '#44403c', boxShadow: isRDV ? '0 1px 2px rgba(0,0,0,0.1)' : 'none', zIndex: isRDV ? 20 : 10 };
+            const textContent = `${badgeIcon}${ev.dogName} ${ev.paymentStatus !== 'appointment' ? `(${ev.dur}j)` : ''}`;
+            return ( <div key={ev.id} className={`absolute h-4 rounded-md text-[9px] font-bold px-1 overflow-hidden cursor-pointer shadow-sm flex items-center gap-1 ${ev.isProvisional ? 'provisional' : ''}`} style={style} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}> <SmartMarquee text={textContent} /> </div> );
         })}</div>))}<div style={{height:'140px'}}></div></div><div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div></div>
     );
 };
@@ -312,16 +494,9 @@ const Stats = ({ dogs, bookings }) => {
     const chartRef = useRef(null); const [statsYear, setStatsYear] = useState(new Date().getFullYear()); const [showTable, setShowTable] = useState(false);
     const getFinancials = () => { let globalTotal = 0; let yearTotal = 0; const monthlyData = Array(12).fill(0); bookings.forEach(b => { const price = Number(b.price || 0); if(price === 0) return; const start = new Date(b.start); start.setHours(12); const end = new Date(b.end); end.setHours(12); const nbDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1); const pricePerDay = price / nbDays; globalTotal += price; let current = new Date(start); for(let i=0; i<nbDays; i++){ if(current.getFullYear()===statsYear) { monthlyData[current.getMonth()]+=pricePerDay; yearTotal+=pricePerDay; } current.setDate(current.getDate()+1); } }); return { globalTotal, yearTotal, monthlyData: monthlyData.map(val => Math.round(val)) }; };
     const { globalTotal: gTotal, yearTotal: yrTotal, monthlyData } = getFinancials();
-    
-    // --- TOP 12 LOGIC ---
-    const getDogStats = () => { 
-        const stats = {}; 
-        bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; const price = Number(b.price || 0); if (!isNaN(price)) { stats[n] = (stats[n]||0) + price; } }); 
-        return Object.entries(stats).map(([name, val]) => ({name, val})).sort((a,b) => b.val - a.val).slice(0, 12); 
-    };
+    const getDogStats = () => { const stats = {}; bookings.forEach(b => { const n = dogs.find(d=>d.id===b.dogId)?.name || b.dogName; const price = Number(b.price || 0); if (!isNaN(price)) { stats[n] = (stats[n]||0) + price; } }); return Object.entries(stats).map(([name, val]) => ({name, val})).sort((a,b) => b.val - a.val).slice(0, 12); };
     const dogStats = getDogStats();
     const [activeSnap, setActiveSnap] = useState(0);
-
     useEffect(() => {
         if(document.getElementById('cBar')) { if(window.bC) window.bC.destroy(); window.bC = new Chart(document.getElementById('cBar'), { type:'bar', data:{labels:['J','F','M','A','M','J','J','A','S','O','N','D'], datasets:[{label:'CA', data:monthlyData, backgroundColor:'#fb7185', borderRadius:4}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, animation: { onComplete: () => { if (window.bC && window.bC.ctx) { const ctx = window.bC.ctx; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; window.bC.data.datasets.forEach(function(dataset) { for (let i = 0; i < dataset.data.length; i++) { const meta = window.bC.getDatasetMeta(0); if (meta && meta.data[i]) { const model = meta.data[i]; const value = monthlyData[i] > 0 ? monthlyData[i] + '€' : ''; ctx.fillText(value, model.x, model.y - 5); } } }); } } } } }); }
         if(document.getElementById('cPie')) { 
@@ -333,9 +508,7 @@ const Stats = ({ dogs, bookings }) => {
             if(window.pC) window.pC.destroy(); window.pC = new Chart(document.getElementById('cPie'), {type:'doughnut', data:{labels:dogLabels, datasets:[{data:dogData, backgroundColor:COLORS}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}}); if(window.sC) window.sC.destroy(); window.sC = new Chart(document.getElementById('cSource'), {type:'doughnut', data:{labels:sourceLabels, datasets:[{data:sourceData, backgroundColor:COLORS.slice().reverse()}]}, options:{plugins:{legend:{position:'right', labels:{boxWidth:10}}}}}); 
         }
     }, [statsYear, bookings, dogs, showTable]);
-    const handleScroll = (e) => { setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth)); };
     const exportData = () => {};
-
     return (
         <>
             <div className="snap-container" onScroll={(e)=>setActiveSnap(Math.round(e.target.scrollLeft / e.target.clientWidth))}><div className="snap-page"><div className="bg-white p-6 rounded-3xl shadow-sm mb-4 border border-stone-100"><div className={S.statTitle}>CA Global</div><div className="text-4xl font-serif font-bold text-stone-700 mt-2">{Math.round(gTotal)} €</div></div><div className="bg-white p-4 rounded-3xl shadow-sm mb-4 border border-stone-100 flex-1 min-h-[300px] flex flex-col"><div className="flex justify-between items-center mb-2"><button onClick={()=>setStatsYear(statsYear-1)}>◀</button><div className="text-center"><div className={S.statTitle}>CA {statsYear}</div><div className="text-xl font-bold text-rose-400">{Math.round(yrTotal)} €</div></div><button onClick={()=>setStatsYear(statsYear+1)}>▶</button></div><div className="flex-1 relative min-h-0"><canvas id="cBar" ref={chartRef}></canvas></div></div><button onClick={exportData} className="w-full bg-stone-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-20"><i className="fas fa-file-csv"></i> Export CSV</button></div><div className="snap-page"><div className="flex flex-col h-full"><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400 flex items-center gap-2 z-20 w-full">PAR CHIEN (TOP 12) <button onClick={()=>setShowTable(true)} className="ml-auto mr-8 bg-stone-100 px-3 py-1 rounded-full text-stone-600 hover:bg-stone-200 border border-stone-200 shadow-sm pointer-events-auto"><i className="fas fa-list"></i></button></div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cPie"></canvas></div></div><div className="bg-white p-2 rounded-3xl shadow-sm mb-2 border border-stone-100 flex-1 flex flex-col relative min-h-[40vh]"><div className="absolute top-2 left-4 text-xs font-bold text-stone-400">PAR SOURCE</div><div className="flex-1 relative min-h-0 pt-6"><canvas id="cSource"></canvas></div></div></div></div></div><div className="stats-dots-container"><div className={`stats-dot ${activeSnap===0 ? 'active' : 'inactive'}`}></div><div className={`stats-dot ${activeSnap===1 ? 'active' : 'inactive'}`}></div></div>{showTable && <div className="overlay-base modal-history"><div className={S.modal}><div className={S.modalHead}><h3 className="font-bold text-lg text-stone-700">Top 12 Clients</h3><button onClick={()=>setShowTable(false)}>✕</button></div><div className="flex-1 overflow-y-auto p-4"><table className="w-full text-sm text-left text-stone-600"><thead className="text-xs text-stone-400 uppercase bg-stone-50"><tr><th className="px-4 py-2">Nom</th><th className="px-4 py-2 text-right">CA Total</th></tr></thead><tbody>{dogStats.map((d, i) => <tr key={i} className="border-b border-stone-100"><td className="px-4 py-3 font-bold">{d.name}</td><td className="px-4 py-3 text-right text-rose-400 font-bold">{Math.round(d.val)} €</td></tr>)}</tbody></table></div></div></div>}
@@ -346,10 +519,7 @@ const Stats = ({ dogs, bookings }) => {
 const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selectedDog, onOpenGallery }) => {
     const [filter, setFilter] = useState(''); const [directoryMode, setDirectoryMode] = useState('relevance');
     let filteredDogs = dogs.filter(d => d.name.toLowerCase().includes(filter.toLowerCase()) || (d.breed && d.breed.toLowerCase().includes(filter.toLowerCase()))); let dogsUpcoming = [];
-    
-    // FIX: Fonction d'ouverture simplifiée
     const handleDogClick = (d) => { setSelectedDog(d); window.history.pushState({ modal: true }, ''); };
-
     if (filter === '' && directoryMode === 'relevance') {
         const today = new Date(); today.setHours(0,0,0,0); const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
         const dogsToday = filteredDogs.filter(d => { const todayEnd = new Date(tomorrow); const activeBooking = bookings.find(b => { const bStart = new Date(b.start); const bEnd = new Date(b.end); return b.dogId === d.id && bStart < todayEnd && bEnd >= today; }); return !!activeBooking; }).sort((a, b) => a.name.localeCompare(b.name));
@@ -361,30 +531,55 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
         const grouped = filteredDogs.sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {});
         filteredDogs = Object.entries(grouped).flatMap(([letter, list]) => [{ type: 'header', label: letter, isAlpha: true }, ...list]);
     }
-    
     if (selectedDog) {
         const dogBookings = bookings.filter(b => b.dogId === selectedDog.id).sort((a,b) => new Date(b.start) - new Date(a.start));
+        const score = calculateScore(selectedDog.eval);
+        let badge = null;
+        if (score >= BLACKLIST_THRESHOLD) badge = <div className="mt-2 bg-stone-800 text-white border-2 border-red-500 px-3 py-1 rounded-full text-xs font-bold animate-pulse">⛔ BLACKLISTÉ ({score})</div>;
+        else if (score >= WARNING_THRESHOLD) badge = <div className="mt-2 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold">⚠️⚠️ À ÉVITER ({score})</div>;
+        else if (score > EXIGENT_THRESHOLD) badge = <div className="mt-2 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">⚠️ Exigeant ({score})</div>;
+        else badge = <div className="mt-2 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold">😊 Facile ({score})</div>;
+        const ageString = calculateAge(selectedDog.birthdate);
         return ( 
-            <div className="scroll-view p-4 bg-stone-50">
-                <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-30 mb-6 rounded-3xl shadow-sm"><div className="absolute left-4 top-1/2 transform -translate-y-1/2"><EditButtonComponent onClick={() => openForm('dog', selectedDog)} /></div><h3 className="font-bold text-lg text-stone-700 mx-auto">Fiche Chien</h3><button onClick={()=>setSelectedDog(null)} className="text-stone-500 font-bold">✕</button></div>
-                <div className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center mb-4">
-                    {/* AVATAR CLIQUABLE POUR GALERIE (MODE CONSULTATION) */}
-                    {selectedDog.photo ? 
-                        <img src={selectedDog.photo} className={S.avatarLarge + " cursor-pointer hover:opacity-90 transition-opacity"} onClick={() => onOpenGallery(selectedDog)} /> 
-                        : <div className={S.avatarLarge} style={{background:selectedDog.color, color:'#fff'}} onClick={() => onOpenGallery(selectedDog)}>{selectedDog.name[0]}</div>
-                    }
-                    <h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">{selectedDog.name}</h2><p className="text-stone-500 font-medium italic">{selectedDog.breed}</p><p className="text-stone-400">{selectedDog.owner}</p><div className="flex gap-4 mt-4"><a href={`tel:${selectedDog.phone}`} className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-xl"><i className="fas fa-phone"></i></a><a href={`sms:${selectedDog.phone}`} className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xl"><i className="fas fa-message"></i></a><a href={`https://wa.me/${selectedDog.phone}`} className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl"><i className="fab fa-whatsapp"></i></a></div><div className="mt-6 w-full bg-stone-50 p-4 rounded-xl text-sm italic text-stone-600 border border-stone-100">{selectedDog.notes || "Aucune note."}</div><button onClick={()=>{openForm('new'); pickDog(selectedDog);}} className={S.btn}>Nouvelle Garde</button></div><h3 className="text-stone-400 text-xs uppercase font-bold tracking-widest mb-2">Historique</h3>{dogBookings.map(h => (<div key={h.id} className="bg-white p-4 rounded-xl mb-2 flex justify-between shadow-sm border border-stone-100 cursor-pointer" onClick={() => openForm('edit', h)}><span className="text-stone-600 font-medium">Du {new Date(h.start).toLocaleDateString()} au {new Date(h.end).toLocaleDateString()}</span><span className="font-bold text-rose-400">{h.price} €</span></div>))}
+            <div className="flex flex-col h-full bg-stone-50">
+                <div className="p-4 border-b bg-white flex justify-between items-center shrink-0 z-30 shadow-sm">
+                    <div className="relative w-8 h-8"><div className="absolute left-0 top-1/2 transform -translate-y-1/2"><EditButtonComponent onClick={() => openForm('dog', selectedDog)} /></div></div>
+                    <h3 className="font-bold text-lg text-stone-700 mx-auto">Fiche Chien</h3>
+                    <button onClick={()=>setSelectedDog(null)} className="text-stone-500 font-bold w-8 text-right">✕</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 pb-32">
+                    <div className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center mb-4">
+                        {selectedDog.photo ? <img src={selectedDog.photo} className={S.avatarLarge + " cursor-pointer hover:opacity-90 transition-opacity"} onClick={() => onOpenGallery(selectedDog)} /> : <div className={S.avatarLarge} style={{background:selectedDog.color, color:'#fff'}} onClick={() => onOpenGallery(selectedDog)}>{selectedDog.name[0]}</div>}
+                        <h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">{selectedDog.name}</h2>
+                        <p className="text-stone-500 font-medium italic">{selectedDog.breed}</p>
+                        {ageString && (<p className="text-xs font-bold text-stone-400 mt-1 uppercase tracking-widest">{ageString} ({selectedDog.birthdate})</p>)}
+                        {badge}
+                        {selectedDog.eval?.isBlacklisted && selectedDog.eval?.blacklistReason && (<div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-100 p-2 rounded-lg font-medium w-full text-center">Raison : {selectedDog.eval.blacklistReason}</div>)}
+                        <p className="text-stone-400 mt-2">{selectedDog.owner}</p>
+                        {/* NOTES AVANT EVAL */}
+                        <div className="mt-6 w-full bg-stone-50 p-4 rounded-xl text-sm italic text-stone-600 border border-stone-100">{selectedDog.notes || "Aucune note."}</div>
+                        <div className="w-full mt-4"><BehaviorEvaluation evalData={selectedDog.eval} isEditing={false} /></div>
+                        
+                        <div className="flex gap-4 mt-4"><a href={`tel:${selectedDog.phone}`} className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-xl"><i className="fas fa-phone"></i></a><a href={`sms:${selectedDog.phone}`} className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 text-xl"><i className="fas fa-message"></i></a><a href={`https://wa.me/${selectedDog.phone}`} className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl"><i className="fab fa-whatsapp"></i></a></div>
+                        <button onClick={()=>{openForm('new'); pickDog(selectedDog);}} className={S.btn}>Nouvelle Garde</button></div><h3 className="text-stone-400 text-xs uppercase font-bold tracking-widest mb-2">Historique</h3>{dogBookings.map(h => (<div key={h.id} className="bg-white p-4 rounded-xl mb-2 flex justify-between shadow-sm border border-stone-100 cursor-pointer" onClick={() => openForm('edit', h)}><span className="text-stone-600 font-medium">Du {new Date(h.start).toLocaleDateString()} au {new Date(h.end).toLocaleDateString()}</span><span className="font-bold text-rose-400">{h.price} €</span></div>))}
+                </div>
             </div> 
         );
     }
-    
     return ( 
         <div className="flex h-full bg-stone-50">
             <div className="flex-1 overflow-y-auto p-4 pb-32 no-scrollbar scroll-smooth">
                 <div className="sticky top-0 bg-stone-50 z-20 pt-1 pb-4"><div className="flex justify-between items-center mb-4"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Rechercher..." className="flex-1 p-3 rounded-xl border border-stone-200 shadow-sm text-stone-600 outline-none placeholder-stone-300" /></div><div className="flex justify-center items-center text-xs font-bold text-stone-500 bg-white rounded-xl shadow-sm border border-stone-200"><button onClick={() => {setDirectoryMode('relevance'); setFilter('');}} className={`flex-1 py-2 rounded-l-xl transition-colors ${directoryMode === 'relevance' ? 'bg-rose-400 text-white' : 'hover:bg-stone-100'}`}>Pertinence</button><button onClick={() => {setDirectoryMode('alphabetical'); setFilter('');}} className={`flex-1 py-2 rounded-r-xl transition-colors ${directoryMode === 'alphabetical' ? 'bg-rose-400 text-white' : 'hover:bg-stone-100'}`}>Alphabétique</button></div></div>
                 {filteredDogs.map((item, index) => {
                     if (item.type === 'header') { const currentDogsUpcoming = dogsUpcoming.filter(d => d.id); return (<div key={item.label} className="text-xs font-bold text-rose-400 mb-2 pl-2 mt-4 sticky top-28 bg-stone-50 z-10">{item.label} {item.label === 'Prochaines Arrivées' && currentDogsUpcoming.length > 0 && currentDogsUpcoming[0].nextArrival && (<span className="text-stone-400 font-normal ml-2 text-[10px]">(Prochaine le {currentDogsUpcoming[0].nextArrival.toLocaleDateString()})</span>)}</div>); } 
-                    else { return ( <div key={item.id} onClick={() => handleDogClick(item)} className={S.card} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700">{item.name}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> ); }
+                    else { 
+                        const score = calculateScore(item.eval);
+                        let badgeClass = ""; let icon = null;
+                        if (score >= BLACKLIST_THRESHOLD) { badgeClass = "border-stone-800 border-r-4 bg-stone-50"; icon = <i className="fas fa-ban text-red-600 text-lg ml-2 animate-pulse" title="Blacklisté"></i>; }
+                        else if (score >= WARNING_THRESHOLD) { badgeClass = "border-red-500 border-r-4"; icon = <span className="text-sm ml-1 tracking-tighter">⚠️⚠️</span>; }
+                        else if (score > EXIGENT_THRESHOLD) { badgeClass = "border-orange-300 border-r-4"; icon = <span className="text-sm ml-1">⚠️</span>; }
+                        return ( <div key={item.id} onClick={() => handleDogClick(item)} className={`${S.card} ${badgeClass}`} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700 flex items-center">{item.name} {icon}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> ); 
+                    }
                 })}
             </div>
             {directoryMode === 'alphabetical' && !filter && (<div className="absolute right-1 top-20 bottom-32 w-6 flex flex-col justify-center items-center z-40 text-[10px] font-bold text-rose-400 bg-white/50 rounded-full">{Object.keys(dogs.sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, d) => { const l=d.name[0].toUpperCase(); if(!acc[l]) acc[l]=[]; acc[l].push(d); return acc; }, {})).map(l => <div key={l} className="flex-1 w-full flex items-center justify-center" onClick={()=>{document.getElementById(`letter-${l}`).scrollIntoView({behavior:'auto'})}}>{l}</div>)}</div>)}
@@ -395,38 +590,38 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
 // --- APP COMPONENT ---
 function App() {
     const [splash, setSplash] = useState(true);
-    const [user, setUser] = useState(null); // GOOGLE USER
-    const [loadingAuth, setLoadingAuth] = useState(true); // Loading State for Auth
-
-    // ⬇️ LISTE BLANCHE EMAILS AUTORISES
+    const [user, setUser] = useState(null); 
+    const [loadingAuth, setLoadingAuth] = useState(true); 
     const ALLOWED_EMAILS = ["a.lorillon@gmail.com", "g.lorillon16@gmail.com"]; 
-
     const [view, setView] = useState('calendar');
     const [bookings, setBookings] = useState([]);
     const [dogs, setDogs] = useState([]);
     const [history, setHistory] = useState([]); 
     const [date, setDate] = new useState(new Date());
-    
     const [modal, setModal] = useState(false);
     const [editId, setEditId] = useState(null);
     const [isDogMode, setIsDogMode] = useState(false);
     const [fullImg, setFullImg] = useState(null);
     const [selectedDog, setSelectedDog] = useState(null);
-    const [isGalleryOpen, setIsGalleryOpen] = useState(false); // NOUVEAU: GALERIE
-    
+    const [isGalleryOpen, setIsGalleryOpen] = useState(false); 
     const [isRangeOpen, setIsRangeOpen] = useState(false);
     const [pickerViewDate, setPickerViewDate] = useState(new Date());
     const [rangeSel, setRangeSel] = useState({ start: null, end: null });
-
     const [showTable, setShowTable] = useState(false);
     const [isEditing, setIsEditing] = useState(false); 
     const [isDogPickerOpen, setIsDogPickerOpen] = useState(false); 
     const [historyDetail, setHistoryDetail] = useState(null); 
-
-    // STATE MIS À JOUR POUR GALERIE
-    const defForm = { dogId:'', dogName:'', breed:'', ownerName:'', phone:'', start:'', end:'', price:'', bookingNotes:'', dogNotes:'', photo:null, gallery:[], source:'', paymentStatus:'pending', deposit:'', isAllDay: true, startTime: '09:00', endTime: '18:00', gender: 'U', isProvisional: false };
+    const defForm = { dogId:'', dogName:'', breed:'', ownerName:'', phone:'', start:'', end:'', price:'', bookingNotes:'', dogNotes:'', photo:null, gallery:[], eval:{}, source:'', paymentStatus:'pending', deposit:'', isAllDay: true, startTime: '09:00', endTime: '18:00', gender: 'U', isProvisional: false, birthdate: '' };
     const [form, setForm] = useState(defForm);
 
+    useEffect(() => { if (selectedDog) { const updatedDog = dogs.find(d => d.id === selectedDog.id); if (updatedDog) setSelectedDog(updatedDog); } }, [dogs]);
+    
+    // DÉCLARATION DES FONCTIONS HELPER EN HAUT DE APP
+    const pickDog = (d) => { setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, dogNotes:d.notes, photo:d.photo, gallery: d.gallery || (d.photo ? [d.photo] : []), eval: d.eval || {}, gender: d.gender || 'U', birthdate: d.birthdate || '' }); };
+    const selectDogFromPicker = (d) => { setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, dogNotes:d.notes, photo:d.photo, gallery: d.gallery || (d.photo ? [d.photo] : []), eval: d.eval || {}, gender: d.gender || 'U', birthdate: d.birthdate || '' }); setIsDogPickerOpen(false); };
+    const openGalleryForDog = (d) => { setForm({ ...defForm, dogId: d.id, dogName: d.name, gallery: d.gallery || (d.photo ? [d.photo] : []), photo: d.photo }); setIsEditing(false); setIsGalleryOpen(true); };
+    const internalGetGenderColor = (gender, dogId) => getGenderColor(gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_UNKNOWN);
+    
     const handleGalleryAdd = (e) => {
         const file = e.target.files[0]; if (!file) return;
         if ((form.gallery || []).length >= 10) return alert("Maximum 10 photos atteint.");
@@ -438,35 +633,16 @@ function App() {
                 if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } } 
                 const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); 
                 const resizedDataURL = canvas.toDataURL('image/jpeg', 0.7); 
-                
-                // AJOUT GALERIE
                 const newGallery = [...(form.gallery || []), resizedDataURL];
-                setForm(prev => ({...prev, gallery: newGallery, photo: newGallery[0] })); // La 1ère photo devient l'avatar
+                setForm(prev => ({...prev, gallery: newGallery, photo: newGallery[0] })); 
             }; 
             img.src = event.target.result; 
         }; 
         reader.readAsDataURL(file);
     };
+    const handleGalleryDelete = (index) => { if(!confirm("Supprimer cette photo ?")) return; const newGallery = form.gallery.filter((_, i) => i !== index); setForm(prev => ({...prev, gallery: newGallery, photo: newGallery.length > 0 ? newGallery[0] : null })); };
+    const handleSetProfile = (index) => { const newGallery = [...form.gallery]; const selectedPhoto = newGallery.splice(index, 1)[0]; newGallery.unshift(selectedPhoto); setForm(prev => ({ ...prev, gallery: newGallery, photo: newGallery[0] })); };
 
-    const handleGalleryDelete = (index) => {
-        if(!confirm("Supprimer cette photo ?")) return;
-        const newGallery = form.gallery.filter((_, i) => i !== index);
-        setForm(prev => ({...prev, gallery: newGallery, photo: newGallery.length > 0 ? newGallery[0] : null })); // Mise à jour avatar
-    };
-
-    // --- NOUVEAU : FONCTION POUR DÉFINIR L'AVATAR (REORDER) ---
-    const handleSetProfile = (index) => {
-        const newGallery = [...form.gallery];
-        const selectedPhoto = newGallery.splice(index, 1)[0]; // On retire la photo choisie
-        newGallery.unshift(selectedPhoto); // On la met au début
-        setForm(prev => ({
-            ...prev,
-            gallery: newGallery,
-            photo: newGallery[0] // La 1ère devient l'avatar
-        }));
-    };
-
-    const internalGetGenderColor = (gender, dogId) => getGenderColor(gender, dogId, dogs, COLORS_MALE, COLORS_FEMALE, COLOR_UNKNOWN);
     const logAction = async (action, data, collectionName, id) => { if (!window.fire) return; const { addDoc, collection } = window.fire; const db = window.db; const dataToLog = JSON.parse(JSON.stringify(data)); if (dataToLog.photo) dataToLog.photo = "Base64 (omitted)"; if (dataToLog.gallery) dataToLog.gallery = `[${dataToLog.gallery.length} photos]`; try { await addDoc(collection(db, "history"), { action, collection: collectionName, data: JSON.stringify(dataToLog), timestamp: new Date(), docId: id || null }); } catch (e) { console.error(e); } };
     const restoreData = async (historyItem) => { const { addDoc, updateDoc, doc, deleteDoc } = window.fire; const db = window.db; let restoredData; try { restoredData = JSON.parse(historyItem.data); if (historyItem.action === 'MODIFICATION') { if (!confirm(`Annuler la modification?`)) return; await updateDoc(doc(db, historyItem.collection, historyItem.docId), restoredData); await logAction("RESTAURATION", { actionType: "MODIFICATION_ANNULEE", restored: true }, historyItem.collection, historyItem.docId); } else if (historyItem.action === 'SUPPRESSION') { if (!confirm(`Restaurer la suppression?`)) return; await updateDoc(doc(db, historyItem.collection, historyItem.docId), restoredData); await logAction("RESTAURATION", { actionType: "SUPPRESSION_ANNULEE", restored: true }, historyItem.collection, historyItem.docId); } else if (historyItem.action === 'CRÉATION') { if (!confirm(`Annuler la création?`)) return; await deleteDoc(doc(db, historyItem.collection, historyItem.docId)); await logAction("RESTAURATION", { actionType: "CREATION_ANNULEE", restored: true }, historyItem.collection, historyItem.docId); } await deleteDoc(doc(db, 'history', historyItem.id)); setHistoryDetail(null); alert("Restauration réussie !"); } catch (e) { console.error(e); alert("Erreur restauration."); } };
 
@@ -474,205 +650,75 @@ function App() {
     const pushHistory = () => { window.history.pushState({ modal: true }, ''); };
     const openDogPicker = () => { pushHistory(); setIsDogPickerOpen(true); }; 
 
-    // --- AUTH & DATA LOADING ---
     useEffect(() => {
         const timer = setTimeout(() => setSplash(false), 2000);
         const unsub = window.onAuthStateChanged(window.auth, async (u) => {
             if (u) {
                 if (ALLOWED_EMAILS.includes(u.email)) {
-                    setUser(u);
-                    setLoadingAuth(false);
+                    setUser(u); setLoadingAuth(false);
                     try { const result = await window.getRedirectResult(window.auth); } catch (error) { console.error("Redirect Error", error); }
-                    setTimeout(() => {
-                        if (!window.fire) return;
-                        const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db;
-                        onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id}))));
-                        onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id}))));
-                        const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100));
-                        onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()}))));
-                    }, 500);
-                } else {
-                    alert("Accès refusé. Cet email n'est pas autorisé.");
-                    await window.signOut(window.auth);
-                    setUser(null);
-                    setLoadingAuth(false);
-                }
-            } else {
-                setUser(null);
-                setLoadingAuth(false);
-            }
+                    setTimeout(() => { if (!window.fire) return; const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db; onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id})))); onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id})))); const historyQuery = query(collection(db, "history"), orderBy("timestamp", "desc"), limit(100)); onSnapshot(historyQuery, (snap) => setHistory(snap.docs.map(d => ({...d.data(), id: d.id, timestamp: d.data().timestamp.toDate()})))); }, 500);
+                } else { alert("Accès refusé. Cet email n'est pas autorisé."); await window.signOut(window.auth); setUser(null); setLoadingAuth(false); }
+            } else { setUser(null); setLoadingAuth(false); }
         });
         return () => { clearTimeout(timer); unsub(); };
     }, []);
 
-    const login = async () => { 
-        setLoadingAuth(true); 
-        try { 
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            if (isMobile) { await window.signInWithRedirect(window.auth, window.googleProvider); } 
-            else { await window.signInWithPopup(window.auth, window.googleProvider); }
-        } catch (e) { alert("Erreur connexion: " + e.message); setLoadingAuth(false); } 
-    };
+    const login = async () => { setLoadingAuth(true); try { const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent); if (isMobile) { await window.signInWithRedirect(window.auth, window.googleProvider); } else { await window.signInWithPopup(window.auth, window.googleProvider); } } catch (e) { alert("Erreur connexion: " + e.message); setLoadingAuth(false); } };
 
     const openForm = (type, data = {}) => {
         pushHistory(); setEditId(data.id || null); setIsDogMode(type === 'dog');
         let initialData = defForm;
         if (type === 'dog') { 
-            // Charge la galerie existante ou initialise vide
-            initialData = { ...data, dogId: data.id, dogName: data.name, ownerName: data.owner, breed: data.breed, phone: data.phone, dogNotes: data.notes, gallery: data.gallery || (data.photo ? [data.photo] : []), photo: data.photo, gender: data.gender || 'U' }; 
-            setIsEditing(true); 
+            initialData = { ...data, dogId: data.id, dogName: data.name, ownerName: data.owner, breed: data.breed, phone: data.phone, dogNotes: data.notes, gallery: data.gallery || (data.photo ? [data.photo] : []), photo: data.photo, eval: data.eval || {}, gender: data.gender || 'U', birthdate: data.birthdate || '' }; setIsEditing(true); 
         } else if (type === 'edit') { 
             initialData = { ...data, bookingNotes: data.notes || "" }; 
             const linkedDog = dogs.find(d => d.id === data.dogId);
-            if (linkedDog) { 
-                initialData.dogNotes = linkedDog.notes || ""; 
-                if (!initialData.phone) initialData.phone = linkedDog.phone;
-                // Charge la galerie du chien lié
-                initialData.gallery = linkedDog.gallery || (linkedDog.photo ? [linkedDog.photo] : []);
-                initialData.photo = linkedDog.photo;
-            }
-            initialData.isAllDay = data.isAllDay === undefined ? true : data.isAllDay; 
-            initialData.startTime = data.startTime || defForm.startTime; 
-            initialData.endTime = data.endTime || defForm.endTime; 
-            initialData.gender = data.gender || (dogs.find(d => d.id === data.dogId)?.gender) || 'U'; 
-            initialData.isProvisional = data.isProvisional === undefined ? false : data.isProvisional; 
-            setIsEditing(false); 
-        } else if (type === 'new') { 
-            initialData = { ...defForm, start: data.date || '' }; 
-            setIsEditing(true); 
-        }
+            if (linkedDog) { initialData.dogNotes = linkedDog.notes || ""; if (!initialData.phone) initialData.phone = linkedDog.phone; initialData.gallery = linkedDog.gallery || (linkedDog.photo ? [linkedDog.photo] : []); initialData.photo = linkedDog.photo; initialData.eval = linkedDog.eval || {}; initialData.birthdate = linkedDog.birthdate || ''; }
+            initialData.isAllDay = data.isAllDay === undefined ? true : data.isAllDay; initialData.startTime = data.startTime || defForm.startTime; initialData.endTime = data.endTime || defForm.endTime; initialData.gender = data.gender || (dogs.find(d => d.id === data.dogId)?.gender) || 'U'; initialData.isProvisional = data.isProvisional === undefined ? false : data.isProvisional; setIsEditing(false); 
+        } else if (type === 'new') { initialData = { ...defForm, start: data.date || '' }; setIsEditing(true); }
         setForm(initialData); setModal(true);
     };
-    
-    // --- FONCTION POUR OUVRIR LA GALERIE EN MODE CONSULTATION (READ-ONLY) ---
-    const openGalleryForDog = (d) => {
-         // On prépare le formulaire avec les données du chien pour que la galerie ait de quoi afficher
-         setForm({
-             ...defForm,
-             dogId: d.id,
-             dogName: d.name,
-             // Important: on charge la galerie
-             gallery: d.gallery || (d.photo ? [d.photo] : []),
-             photo: d.photo
-         });
-         setIsEditing(false); // IMPORTANT : Mode consultation => pas de suppression/ajout
-         setIsGalleryOpen(true);
-    };
-    
-    const pickDog = (d) => { setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, dogNotes:d.notes, photo:d.photo, gallery: d.gallery || (d.photo ? [d.photo] : []), gender: d.gender || 'U' }); }
-    const selectDogFromPicker = (d) => { setForm({ ...form, dogId:d.id, dogName:d.name, breed:d.breed, ownerName:d.owner, phone:d.phone, dogNotes:d.notes, photo:d.photo, gallery: d.gallery || (d.photo ? [d.photo] : []), gender: d.gender || 'U' }); setIsDogPickerOpen(false); };
+
     const openRange = () => { pushHistory(); const startDate = form.start || null; const endDate = form.end || null; const startObj = startDate && !isNaN(new Date(startDate)) ? new Date(startDate) : null; const endObj = endDate && !isNaN(new Date(endDate)) ? new Date(endDate) : null; setRangeSel({ start: startObj, end: endObj }); setPickerViewDate(startObj || new Date()); setIsRangeOpen(true); };
     const handleRangeClick = (d) => { let { start, end } = rangeSel; if (!start || (start && end)) { setRangeSel({ start: d, end: null }); } else { const s = d < start ? d : start; const e = d < start ? start : d; setRangeSel({ start: s, end: e }); setTimeout(() => { const toLocal = (dt) => { const offset = dt.getTimezoneOffset() * 60000; return new Date(dt.getTime() - offset).toISOString().split('T')[0]; }; setForm(prev => ({ ...prev, start: toLocal(s), end: toLocal(e) })); setIsRangeOpen(false); }, 300); } };
     
     const save = async () => { 
         if (!window.fire) return alert("Firebase HS"); 
         try { 
-            const { addDoc, updateDoc, doc, collection } = window.fire; const db = window.db; 
-            let dId = form.dogId; 
-            const clean = (val) => val === undefined || val === null ? "" : val; 
-            const newColor = internalGetGenderColor(form.gender, dId); 
-            
-            // SAUVEGARDE GALERIE DANS DOGS
-            const dogData = { name: clean(form.dogName)||"Inconnu", breed: clean(form.breed), owner: clean(form.ownerName), phone: clean(form.phone), notes: clean(form.dogNotes), photo: form.photo||null, gallery: form.gallery || [], color: newColor, gender: form.gender }; 
-            
-            if (dId) { 
-                const oldDog = dogs.find(d => d.id === dId); 
-                await logAction("MODIFICATION", oldDog, "dogs", dId); 
-                await updateDoc(doc(db, "dogs", dId), dogData); 
-            } else { 
-                const ref = await addDoc(collection(db, "dogs"), {...dogData}); 
-                dId = ref.id; 
-                await logAction("CRÉATION", dogData, "dogs", dId); 
-            } 
-            
+            const { addDoc, updateDoc, doc, collection } = window.fire; const db = window.db; let dId = form.dogId; const clean = (val) => val === undefined || val === null ? "" : val; const newColor = internalGetGenderColor(form.gender, dId); 
+            const dogData = { name: clean(form.dogName)||"Inconnu", breed: clean(form.breed), owner: clean(form.ownerName), phone: clean(form.phone), notes: clean(form.dogNotes), photo: form.photo||null, gallery: form.gallery || [], eval: form.eval || {}, color: newColor, gender: form.gender, birthdate: clean(form.birthdate) }; 
+            if (dId) { const oldDog = dogs.find(d => d.id === dId); await logAction("MODIFICATION", oldDog, "dogs", dId); await updateDoc(doc(db, "dogs", dId), dogData); } else { const ref = await addDoc(collection(db, "dogs"), {...dogData}); dId = ref.id; await logAction("CRÉATION", dogData, "dogs", dId); } 
             if (!isDogMode) { 
-                const isAllDay = form.isAllDay; 
-                let startDate = clean(form.start) || ''; let endDate = clean(form.end) || ''; 
+                const isAllDay = form.isAllDay; let startDate = clean(form.start) || ''; let endDate = clean(form.end) || ''; 
                 if (!startDate || !endDate) { alert("Veuillez sélectionner une période de séjour valide."); return; } 
-                if (!isAllDay) { 
-                    const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate; 
-                    const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate; 
-                    startDate = baseStart + 'T' + clean(form.startTime) + ':00'; 
-                    endDate = baseEnd + 'T' + clean(form.endTime) + ':00'; 
-                } else if (startDate.includes('T')) { 
-                    startDate = startDate.split('T')[0]; endDate = endDate.split('T')[0]; 
-                } 
-                let price = clean(form.price) || "0"; let deposit = clean(form.deposit) || ""; 
-                if (form.paymentStatus === 'appointment') { price = "0"; deposit = ""; } 
-                
+                if (!isAllDay) { const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate; const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate; startDate = baseStart + 'T' + clean(form.startTime) + ':00'; endDate = baseEnd + 'T' + clean(form.endTime) + ':00'; } else if (startDate.includes('T')) { startDate = startDate.split('T')[0]; endDate = endDate.split('T')[0]; } 
+                let price = clean(form.price) || "0"; let deposit = clean(form.deposit) || ""; if (form.paymentStatus === 'appointment') { price = "0"; deposit = ""; } 
                 const bookData = { dogId: dId, dogName: clean(form.dogName), breed: clean(form.breed), ownerName: clean(form.ownerName), phone: clean(form.phone), price: price, start: startDate, end: endDate, color: newColor, notes: clean(form.bookingNotes), source: clean(form.source), paymentStatus: form.paymentStatus||'pending', deposit: deposit, isAllDay: isAllDay, startTime: clean(form.startTime), endTime: clean(form.endTime), photo: form.photo || null, gender: form.gender, isProvisional: form.isProvisional || false }; 
-                
-                if (editId) { 
-                    const oldBooking = bookings.find(b => b.id === editId); 
-                    await logAction("MODIFICATION", oldBooking, "bookings", editId); 
-                    await updateDoc(doc(db, "bookings", editId), bookData); 
-                    if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) sendMail("MODIFICATION DATES", {...bookData, dogNotes: form.dogNotes, bookingNotes: form.bookingNotes}, oldBooking); 
-                } else { 
-                    const ref = await addDoc(collection(db, "bookings"), bookData); 
-                    await logAction("CRÉATION", bookData, "bookings", ref.id); 
-                    sendMail("NOUVELLE RÉSERVATION", {...bookData, dogNotes: form.dogNotes, bookingNotes: form.bookingNotes}); 
-                } 
+                if (editId) { const oldBooking = bookings.find(b => b.id === editId); await logAction("MODIFICATION", oldBooking, "bookings", editId); await updateDoc(doc(db, "bookings", editId), bookData); if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) sendMail("MODIFICATION DATES", {...bookData, dogNotes: form.dogNotes, bookingNotes: form.bookingNotes}, oldBooking); } else { const ref = await addDoc(collection(db, "bookings"), bookData); await logAction("CRÉATION", bookData, "bookings", ref.id); sendMail("NOUVELLE RÉSERVATION", {...bookData, dogNotes: form.dogNotes, bookingNotes: form.bookingNotes}); } 
             } 
             setModal(false); setIsEditing(false); 
         } catch (err) { console.error(err); alert("Erreur: "+err.message); } 
     };
     
     const remove = async () => { if(!confirm("Supprimer ?")) return; const { deleteDoc, doc } = window.fire; const db = window.db; const dataBackup = { ...form }; if (isDogMode) { await deleteDoc(doc(db, "dogs", form.id)); await logAction("SUPPRESSION", dataBackup, "dogs", form.id); setSelectedDog(null); } else { await deleteDoc(doc(db, "bookings", editId)); await logAction("SUPPRESSION", dataBackup, "bookings", editId); sendMail("SUPPRESSION", dataBackup); } setModal(false); setIsEditing(false); };
+    const handleFabClick = () => { if (view === 'directory') { openForm('dog', {}); } else { openForm('new', {}); } };
 
-    // --- FAB HANDLER INTELLIGENT ---
-    const handleFabClick = () => {
-        if (view === 'directory') {
-            openForm('dog', {}); // NOUVEAU CHIEN
-        } else {
-            openForm('new', {}); // NOUVELLE RESA
-        }
-    };
-
-    if (splash || loadingAuth) return ( 
-        <div className="fixed inset-0 z-[100] bg-[#fafaf9] flex flex-col items-center justify-center">
-            <img src="logo.png" className="w-32 h-32 rounded-3xl shadow-2xl mb-6 object-cover border-4 border-white" />
-            <h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou,<br/>je t'aime</h1>
-            <div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center">4 Pattes Manager (BETA)</div> 
-        </div>
-    );
-    
-    if (!user) return (
-        <div className="login-screen">
-             <img src="logo.png" className="w-24 h-24 rounded-3xl shadow-xl mb-6" />
-             <h2 className="text-xl font-bold text-stone-600 mb-4">Connexion Requise</h2>
-             <button onClick={login} className="google-btn"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6"/>Se connecter avec Google</button>
-        </div>
-    );
+    if (splash || loadingAuth) return ( <div className="fixed inset-0 z-[100] bg-[#fafaf9] flex flex-col items-center justify-center"><img src="logo.png" className="w-32 h-32 rounded-3xl shadow-2xl mb-6 object-cover border-4 border-white" /><h1 className="text-4xl font-serif font-bold text-stone-700 tracking-tight text-center">Bonjour Chouchou,<br/>je t'aime</h1><div className="text-sm text-stone-400 font-bold uppercase tracking-widest mt-2 text-center">4 Pattes Manager</div></div> );
+    if (!user) return ( <div className="login-screen"><img src="logo.png" className="w-24 h-24 rounded-3xl shadow-xl mb-6" /><h2 className="text-xl font-bold text-stone-600 mb-4">Connexion Requise</h2><button onClick={login} className="google-btn"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6"/>Se connecter avec Google</button></div> );
 
     return (
         <div className="flex flex-col h-full bg-stone-50">
-            <div className="flex-1 overflow-hidden relative">{view==='calendar' && <Calendar date={date} setDate={setDate} openForm={openForm} bookings={bookings} />}{view==='directory' && <Directory dogs={dogs} bookings={bookings} openForm={openForm} pickDog={pickDog} setSelectedDog={setSelectedDog} selectedDog={selectedDog} onOpenGallery={openGalleryForDog} />} {view==='stats' && <Stats dogs={dogs} bookings={bookings} />} {view==='history' && <HistoryPage setHistoryDetail={setHistoryDetail} onRestore={restoreData} history={history} />}</div>
-            
+            <div className="flex-1 overflow-hidden relative">{view==='calendar' && <Calendar date={date} setDate={setDate} openForm={openForm} bookings={bookings} dogs={dogs} />}{view==='directory' && <Directory dogs={dogs} bookings={bookings} openForm={openForm} pickDog={pickDog} setSelectedDog={setSelectedDog} selectedDog={selectedDog} onOpenGallery={openGalleryForDog} />} {view==='stats' && <Stats dogs={dogs} bookings={bookings} />} {view==='history' && <HistoryPage setHistoryDetail={setHistoryDetail} onRestore={restoreData} history={history} />}</div>
             <div className={S.nav}>
-                <div className="flex gap-8">
-                    <div onClick={()=>setView('calendar')} className={S.iconBox}><i className={`fas fa-calendar-alt text-2xl ${view==='calendar'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Agenda</span></div>
-                    <div onClick={()=>setView('directory')} className={S.iconBox}><i className={`fas fa-address-book text-2xl ${view==='directory'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Carnet</span></div>
-                </div>
-                <div className={S.fabPos}>
-                    <button onClick={handleFabClick} className={S.fab}>
-                        <i className={`fas ${view === 'directory' ? 'fa-dog' : 'fa-plus'} text-2xl`}></i>
-                    </button>
-                </div>
-                
-                <div className="flex justify-end gap-6"> 
-                    <div onClick={()=>setView('history')} className={S.iconBox}><i className={`fas fa-history text-2xl ${view==='history'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Historique</span></div>
-                    <div onClick={()=>setView('stats')} className={S.iconBox}><i className={`fas fa-chart-pie text-2xl ${view==='stats'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Stats</span></div>
-                </div>
+                <div className="flex gap-8"><div onClick={()=>setView('calendar')} className={S.iconBox}><i className={`fas fa-calendar-alt text-2xl ${view==='calendar'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Agenda</span></div><div onClick={()=>setView('directory')} className={S.iconBox}><i className={`fas fa-address-book text-2xl ${view==='directory'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Carnet</span></div></div>
+                <div className={S.fabPos}><button onClick={handleFabClick} className={S.fab}><i className={`fas ${view === 'directory' ? 'fa-dog' : 'fa-plus'} text-2xl`}></i></button></div>
+                <div className="flex justify-end gap-6"><div onClick={()=>setView('history')} className={S.iconBox}><i className={`fas fa-history text-2xl ${view==='history'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Historique</span></div><div onClick={()=>setView('stats')} className={S.iconBox}><i className={`fas fa-chart-pie text-2xl ${view==='stats'?S.active:S.inactive}`}></i><span className="text-[10px] font-bold mt-1">Stats</span></div></div>
             </div>
-            
             {isRangeOpen && <RangePickerModal isRangeOpen={isRangeOpen} setIsRangeOpen={setIsRangeOpen} rangeSel={rangeSel} setRangeSel={setRangeSel} pickerViewDate={pickerViewDate} setPickerViewDate={setPickerViewDate} handleRangeClick={handleRangeClick} />}
-            
-            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={selectDogFromPicker} dogs={dogs} />
+            <DogPickerModal isOpen={isDogPickerOpen} onClose={() => setIsDogPickerOpen(false)} onSelect={(d) => selectDogFromPicker(d)} dogs={dogs} />
             <HistoryDetailModal item={historyDetail} onClose={() => setHistoryDetail(null)} onRestore={restoreData} dogs={dogs} bookings={bookings} />
-            
-            {/* NOUVELLE MODALE GALERIE AVEC ACTION SET PROFIL */}
             <GalleryModal isOpen={isGalleryOpen} onClose={() => setIsGalleryOpen(false)} photos={form.gallery || []} onAdd={handleGalleryAdd} onDelete={handleGalleryDelete} onView={setFullImg} onSetProfile={handleSetProfile} isEditing={isEditing} />
-
             {modal && (
                 <div className="overlay-base modal-reservation"><div className={S.modal}><div className={S.modalHead}>
                     {editId && !isDogMode && !isEditing && ( <div className="absolute left-4 top-1/2 transform -translate-y-1/2"> <EditButtonComponent onClick={() => setIsEditing(true)} /> </div> )}
@@ -680,12 +726,7 @@ function App() {
                     <button onClick={()=>setModal(false) & setIsEditing(false)} className="text-stone-500 font-bold">✕</button>
                 </div><div className="flex-1 overflow-y-auto p-4 space-y-4">
                     <div className="flex gap-4 items-center">
-                        
-                        {/* AVATAR CLICKABLE (GALERIE) - TOUJOURS ACTIF */}
-                        <div onClick={() => setIsGalleryOpen(true)} className="relative w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-stone-200 shrink-0 cursor-pointer active:scale-95 transition-transform group hover:border-blue-400">
-                            {form.photo ? <img src={form.photo} className="w-full h-full object-cover"/> : <span className="text-2xl text-stone-300">📷</span>}
-                        </div>
-
+                        <div onClick={() => setIsGalleryOpen(true)} className="relative w-20 h-20 bg-stone-100 rounded-full flex items-center justify-center overflow-hidden border-2 border-stone-200 shrink-0 cursor-pointer active:scale-95 transition-transform group hover:border-blue-400">{form.photo ? <img src={form.photo} className="w-full h-full object-cover"/> : <span className="text-2xl text-stone-300">📷</span>}</div>
                         <div className="flex-1">
                             {!isDogMode && ( <div className="flex items-center gap-2 mb-2"><input className="flex-1 p-2 rounded-lg bg-stone-100 text-xs border border-stone-200 focus:ring-rose-200 outline-none text-stone-600" list="dogs-list" placeholder="Nom du chien..." onChange={e => { const name = e.target.value; setForm({...form, dogName: name}); const d = dogs.find(x => x.name.toLowerCase() === name.toLowerCase()); if(d) selectDogFromPicker(d); }} value={form.dogName} disabled={!isEditing && editId} /> <datalist id="dogs-list">{dogs.map(d=><option key={d.id} value={d.name}></option>)}</datalist> <OpenDirectoryButton onOpen={openDogPicker} isEditing={isEditing} /> </div> )}
                             { (editId || isDogMode) && <input className={S.input} value={form.dogName||''} onChange={e=>setForm({...form, dogName:e.target.value})} placeholder="Nom Chien" disabled={!isEditing}/> }
@@ -700,21 +741,15 @@ function App() {
                         <label className={S.label}>SOURCE</label><input className={S.input} list="sources" value={form.source||''} onChange={e=>setForm({...form, source:e.target.value})} placeholder="ex: Rover, Fidélisé..." disabled={!isEditing}/><datalist id="sources"><option value="Le Bon Coin"/><option value="Rover"/><option value="Animaute"/><option value="Fidélisé"/><option value="Bouche à oreille"/></datalist></div>)}
                         <input className={S.input} value={form.ownerName||''} onChange={e=>setForm({...form, ownerName:e.target.value})} placeholder="Propriétaire" disabled={!isEditing}/>
                         <input className={S.input} type="tel" value={form.phone||''} onChange={e=>setForm({...form, phone:e.target.value})} placeholder="Téléphone" disabled={!isEditing}/>
+                        <div className="mt-2"><label className={S.label}>Date de Naissance</label><input className={S.input} type="text" value={form.birthdate||''} onChange={e=>setForm({...form, birthdate:e.target.value})} placeholder="JJ/MM/AAAA ou MM/AAAA" disabled={!isEditing}/></div>
                         {!isDogMode && (<div><div className="flex gap-2 mb-2"><div className="flex-1"><label className={S.label}>PRIX TOTAL</label><input type="number" value={form.price||''} onChange={e=>setForm({...form, price:e.target.value})} placeholder="€" disabled={!isEditing || form.paymentStatus === 'appointment'} className={S.input} /></div><div className="flex-1"><label className={S.label}>PAIEMENT</label><select className={S.input} value={form.paymentStatus||'pending'} onChange={e=>setForm({...form, paymentStatus:e.target.value, price: e.target.value === 'appointment' ? '0' : form.price, deposit: e.target.value === 'appointment' ? '' : form.deposit })} disabled={!isEditing}><option value="pending">🔴 À Payer</option><option value="deposit">🟠 Acompte</option><option value="paid">🟢 Payé</option><option value="appointment">🗓️ RDV</option></select></div></div>{form.paymentStatus === 'deposit' && (<div className="bg-orange-50 p-2 rounded-lg border border-orange-100 flex items-center gap-2 mb-2"><input className="w-20 p-1 text-sm border rounded" type="number" placeholder="Reçu" value={form.deposit||''} onChange={e=>setForm({...form, deposit:e.target.value})} disabled={!isEditing}/><span className="text-xs text-orange-800 font-bold">€ reçu. Reste : <span className="text-lg">{(form.price||0) - (form.deposit||0)} €</span></span></div>)}</div>)}
+                        {/* NOTES AVANT EVAL */}
+                        <label className={S.label}>Notes Permanentes (Fiche Chien) - ⚠ Modifie le profil</label><textarea className={`${S.input} h-20 bg-yellow-50 border-yellow-200`} value={form.dogNotes||''} onChange={e=>setForm({...form, dogNotes:e.target.value})} placeholder="Allergies, comportement..." disabled={!isEditing}/>
+                        {!isDogMode && (<><label className={S.label}>Notes de ce Séjour (Spécifique)</label><textarea className={`${S.input} h-20`} value={form.bookingNotes||''} onChange={e=>setForm({...form, bookingNotes:e.target.value})} placeholder="Apportera ses croquettes..." disabled={!isEditing}/></>)}
                         
-                        <label className={S.label}>Notes Permanentes (Fiche Chien) - ⚠ Modifie le profil</label>
-                        <textarea className={`${S.input} h-20 bg-yellow-50 border-yellow-200`} value={form.dogNotes||''} onChange={e=>setForm({...form, dogNotes:e.target.value})} placeholder="Allergies, comportement..." disabled={!isEditing}/>
-
-                        {!isDogMode && (
-                            <>
-                            <label className={S.label}>Notes de ce Séjour (Spécifique)</label>
-                            <textarea className={`${S.input} h-20`} value={form.bookingNotes||''} onChange={e=>setForm({...form, bookingNotes:e.target.value})} placeholder="Apportera ses croquettes..." disabled={!isEditing}/>
-                            </>
-                        )}
-
+                        <BehaviorEvaluation evalData={form.eval} setForm={setForm} isEditing={isEditing} />
                     </div><div className="p-4 bg-white border-t flex gap-2">{isEditing && <button onClick={save} className={S.btn}>Valider</button>}{(editId||isDogMode) && isEditing && <button onClick={remove} className="text-red-400 font-bold px-4 mt-4">Supprimer</button>}</div></div></div>
             )}
-
             {fullImg && <div className="overlay-base z-[120]" onClick={()=>setFullImg(null)}><img src={fullImg} className="max-w-full max-h-full rounded-lg shadow-2xl"/></div>}
         </div>
     );

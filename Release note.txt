@@ -1,0 +1,72 @@
+
+//////////////////////////////////////////////////////////////
+
+Mini Release Note (v107.0 ➝ v1 officielle)
+✨ Nouveautés Majeures :
+
+Système d'Évaluation V2 : Passage de 5 à 11 critères détaillés (Stérilisé, Solitude, Fugueur, Dégâts, Balade, Joue avec Uska, etc.).
+
+Gestion Blacklist : Ajout d'un bouton "Blacklister (+100 pts)" avec champ pour saisir la raison (ex: "Mord").
+
+Calcul de l'Âge : Ajout du champ "Date de naissance" avec calcul automatique de l'âge (ex: "4 ans et 2 mois") affiché dans la fiche.
+
+🎨 Interface & Ergonomie :
+
+Hiérarchie Visuelle :
+
+Les blocs Notes (Permanentes et Séjour) sont désormais situés au-dessus de l'évaluation pour une lecture prioritaire.
+
+Nouvelles icônes d'alerte dans le Carnet et l'Agenda : ⚠️ (Exigeant), ⚠️⚠️ (À éviter), ⛔ (Blacklisté).
+
+Agenda Intelligent : Le texte des barres de réservation ne défile que s'il est trop long (plus de fondu flou sur les côtés).
+
+Nettoyage : Suppression de la mention "BETA".
+
+⚙️ Logique & Seuils :
+
+Nouveaux Seuils de difficulté :
+
+😊 Facile : 0 à 25 points.
+
+⚠️ Exigeant : 26 à 79 points.
+
+⛔ À ÉVITER : 80 points et plus.
+
+Wording : Ajustement des termes (ex: "Patte" → "Pisse bcp", "Rentre" → "Réclame In").
+
+🐛 Correctifs (Bug Fixes) :
+
+Scroll Fiche Chien : Correction du bug qui empêchait de voir l'historique en bas de page.
+
+Synchro Instantanée : La fiche du chien s'actualise désormais immédiatement après une modification (plus besoin de fermer/rouvrir).
+
+Crash Fix : Correction de l'erreur selectDogFromPicker is not defined.
+
+/////////////////////////////////////////////////////////////
+
+Mini Release Note (v95.0 ➝ v107.0)
+- Galerie & Photos (Majeur) :
+
+Passage d'une photo unique à une Galerie multi-photos (max 10).
+
+Qualité d'image augmentée (150px ➝ 450px pour plus de netteté).
+
+Possibilité de définir l'avatar principal via un bouton étoile.
+
+L'avatar est cliquable partout (Agenda et Carnet) pour ouvrir la visionneuse.
+
+- Agenda & Visuel :
+
+Distinction visuelle RDV vs Séjour : Les RDV sont désormais des cadres vides (fond blanc) et plus étroits (80%).
+
+Rendu des barres amélioré : Ajout d'espaces (10%) au début et à la fin des séjours pour mieux visualiser les entrées/sorties.
+
+- Gestion des Données :
+
+Séparation claire des Notes Chien (permanentes, fond jaune) et des Notes Réservation (ponctuelles).
+
+- Ergonomie & Stats :
+
+Bouton "+" Contextuel : Crée un Chien si on est dans le Carnet, ou une Réservation si on est dans l'Agenda.
+
+Stats : Le graphique "Par Chien" se limite au Top 12 pour la lisibilité.
