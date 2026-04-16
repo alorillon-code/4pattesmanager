@@ -20,7 +20,6 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
 <style>
-    /* Modifié : overscroll-behavior-y au lieu de touch-action pour permettre le scroll ! */
     body { background-color: #fafaf9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #44403c; margin:0; overscroll-behavior-y: none; }
     input, textarea, select { font-size: 16px !important; }
     .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
@@ -66,7 +65,7 @@
     @keyframes marquee { 0% { transform: translateX(0); } 20% { transform: translateX(0); } 100% { transform: translateX(calc(-100% + 80%)); } }
 
     /* CSS POUR L'ASSISTANT SWIPE */
-    .swipe-container { position: relative; overflow: hidden; border-radius: 0.75rem; margin-bottom: 0.75rem; touch-action: pan-y; }
+    .swipe-container { position: relative; overflow: hidden; border-radius: 0.75rem; margin-bottom: 0.75rem; touch-action: pan-y; } /* pan-y permet au navigateur de comprendre qu'on veut scroller verticalement */
     .swipe-bg-left { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-start; padding-left: 1.5rem; background-color: #10b981; color: white; font-weight: bold; } 
     .swipe-bg-right { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 1.5rem; background-color: #ef4444; color: white; font-weight: bold; } 
     .swipe-content { position: relative; background: white; z-index: 10; border: 1px solid #e7e5e4; border-radius: 0.75rem; transition: transform 0.2s ease-out; }
@@ -356,13 +355,41 @@ const RangePickerModal = ({ isRangeOpen, setIsRangeOpen, rangeSel, setRangeSel, 
 };
 
 const Calendar = ({ date, setDate, openForm, bookings, dogs, isOffline }) => {
+    const [startX, setStartX] = useState(null);
+    const [startY, setStartY] = useState(null);
+
+    const handleTouchStart = (e) => {
+        setStartX(e.touches[0].clientX);
+        setStartY(e.touches[0].clientY);
+    };
+
+    const handleTouchEnd = (e) => {
+        if (startX === null || startY === null) return;
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const diffX = startX - endX;
+        const diffY = startY - endY;
+
+        // Limite directionnelle pour le changement de mois dans l'agenda
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+            if (diffX > 0) {
+                setDate(new Date(date.getFullYear(), date.getMonth() + 1));
+            } else {
+                setDate(new Date(date.getFullYear(), date.getMonth() - 1));
+            }
+        }
+        setStartX(null);
+        setStartY(null);
+    };
+
     const y = date.getFullYear(), m = date.getMonth(); const d1 = new Date(y, m, 1, 12, 0, 0); const start = new Date(d1); start.setDate(d1.getDate() - (d1.getDay()===0?6:d1.getDay()-1)); let weeks = [], curr = new Date(start);
     for(let w=0; w<6; w++) { let days = []; for(let d=0; d<7; d++) { days.push(new Date(curr)); curr.setDate(curr.getDate()+1); } if(w>4 && days[0].getMonth() !== m) break; const wStart = new Date(days[0]); wStart.setHours(0,0,0,0); const wEnd = new Date(days[6]); wEnd.setHours(23,59,59,999); const evts = bookings.filter(b => { const s=new Date(b.start); s.setHours(0,0,0,0); const e=new Date(b.end); e.setHours(0,0,0,0); return s<=wEnd && e>=wStart; }).sort((a,b)=>new Date(a.start)-new Date(b.start));
         const items = evts.map(ev => { const s=new Date(ev.start); s.setHours(0,0,0,0); const e=new Date(ev.end); e.setHours(0,0,0,0); const dur = Math.ceil((e-s)/86400000)+1; let st = Math.floor((s - wStart)/86400000); if(st<0) st=0; let en = Math.floor((e - wStart)/86400000); if(en>6) en=6; return { ...ev, dur, st, en }; });
         const placed = []; const rows = []; items.forEach(ev => { let rowIdx = 0; while(true) { if(!rows[rowIdx]) rows[rowIdx] = Array(7).fill(false); let fit = true; for(let i=ev.st; i<=ev.en; i++) if(rows[rowIdx][i]) fit=false; if(fit) { for(let i=ev.st; i<=ev.en; i++) rows[rowIdx][i] = true; placed.push({...ev, row: rowIdx}); break; } rowIdx++; } }); weeks.push({days, items: placed});
     }
     return (
-        <div className="flex flex-col h-full overflow-hidden"><div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div><div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>{weeks.map((w,i) => (<div key={i} className="calendar-week" style={{flex:1}}>{w.days.map((d,j) => { const isToday = d.toDateString() === new Date().toDateString(); return <div key={j} className={`calendar-day`} onClick={()=>{ if(!isOffline) openForm('new',{date:d.toISOString().split('T')[0]}); else alert("Création impossible hors ligne"); }}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>; })}{w.items.map(ev => {
+        <div className="flex flex-col h-full overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+            <div className={S.daysHeader}>{['L','M','Me','J','V','S','D'].map((d, index)=><div key={index} className={S.dayHeaderCell}>{d}</div>)}</div><div className="flex-1 flex flex-col" style={{overflowY:'auto'}}>{weeks.map((w,i) => (<div key={i} className="calendar-week" style={{flex:1}}>{w.days.map((d,j) => { const isToday = d.toDateString() === new Date().toDateString(); return <div key={j} className={`calendar-day`} onClick={()=>{ if(!isOffline) openForm('new',{date:d.toISOString().split('T')[0]}); else alert("Création impossible hors ligne"); }}>{isToday && <div className="paw-stamp"><i className="fas fa-paw"></i></div>}<div className="absolute top-1 right-1 z-30 font-bold text-xs p-1 text-stone-700">{d.getDate()}</div></div>; })}{w.items.map(ev => {
             const isRDV = ev.paymentStatus === 'appointment';
             const linkedDog = dogs.find(d => d.id === ev.dogId);
             const score = calculateScore(linkedDog?.eval);
@@ -386,7 +413,10 @@ const Calendar = ({ date, setDate, openForm, bookings, dogs, isOffline }) => {
             
             const textContent = `${paymentBadge}${badgeIcon}${ev.dogName} ${ev.paymentStatus !== 'appointment' ? `(${ev.dur}j)` : ''}`;
             return ( <div key={ev.id} className={`absolute h-4 rounded-md text-[9px] font-bold px-1 overflow-hidden cursor-pointer shadow-sm flex items-center gap-1 ${ev.isProvisional ? 'provisional' : ''}`} style={style} onClick={(e)=>{e.stopPropagation(); openForm('edit', ev)}}> <SmartMarquee text={textContent} /> </div> );
-        })}</div>))}<div style={{height:'140px'}}></div></div><div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div></div>
+        })}</div>))}
+        <div style={{height:'140px'}}></div>
+        </div>
+        <div className={S.monthNav}><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()-1))} className={S.monthBtn}><i className="fas fa-chevron-left"></i></button><div className="relative"><span className={S.monthTitle}>{date.toLocaleString('fr',{month:'long', year:'numeric'})}</span><input type="month" className="month-picker-trigger" value={`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`} onChange={(e)=>setDate(new Date(e.target.value))}/></div><button onClick={()=>setDate(new Date(date.getFullYear(), date.getMonth()+1))} className={S.monthBtn}><i className="fas fa-chevron-right"></i></button></div></div>
     );
 };
 
@@ -558,24 +588,40 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
 
 const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     const [startX, setStartX] = useState(0);
+    const [startY, setStartY] = useState(0); // Ajout d'une détection verticale
     const [currentX, setCurrentX] = useState(0);
     const [isSwiping, setIsSwiping] = useState(false);
+    const [isScrolling, setIsScrolling] = useState(false); // Mode "je descends dans la page"
     const contentRef = useRef(null);
 
     const handleTouchStart = (e) => {
         setStartX(e.touches[0].clientX);
+        setStartY(e.touches[0].clientY);
         setIsSwiping(true);
+        setIsScrolling(false);
     };
 
     const handleTouchMove = (e) => {
-        if (!isSwiping) return;
-        const diff = e.touches[0].clientX - startX;
-        if (diff > -100 && diff < 100) {
-            setCurrentX(diff);
+        if (!isSwiping || isScrolling) return;
+        const diffX = e.touches[0].clientX - startX;
+        const diffY = e.touches[0].clientY - startY;
+
+        // Si le doigt bouge plus verticalement qu'horizontalement (Scroll normal)
+        if (Math.abs(diffY) > 10 && Math.abs(diffY) > Math.abs(diffX)) {
+            setIsScrolling(true);
+            setIsSwiping(false);
+            setCurrentX(0); // On annule le swipe
+            return;
+        }
+
+        // Si le doigt va vraiment à gauche ou à droite
+        if (diffX > -100 && diffX < 100) {
+            setCurrentX(diffX);
         }
     };
 
     const handleTouchEnd = () => {
+        if (isScrolling) return; // Si on scrollait, on ignore la fin du swipe
         setIsSwiping(false);
         if (currentX > 60) {
             onMarkRead(task.id);
@@ -659,7 +705,6 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
             if (missing.length > 0) {
                 let targetType = 'dog';
                 let targetBooking = null;
-                // Modifié : On force la date la plus récente au sommet
                 let alertTimestamp = Date.now(); 
                 
                 if (bookingsMissingSource.length > 0) {
@@ -668,7 +713,6 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
                     targetBooking = bookingsMissingSource[0];
                     if (targetBooking.end) alertTimestamp = new Date(targetBooking.end).getTime();
                 } else if (dogBookings.length > 0) {
-                    // Si on a des réservations mais on modifie le chien, on prend la dernière pour l'ordre
                     dogBookings.sort((a,b) => new Date(b.end) - new Date(a.end));
                     if (dogBookings[0].end) alertTimestamp = new Date(dogBookings[0].end).getTime();
                 }
@@ -680,7 +724,7 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
         });
 
         bookings.forEach(b => {
-            if (!b.end) return; // Sécurité si date vide
+            if (!b.end) return; 
             const endDate = new Date(b.end);
             if (isNaN(endDate.getTime())) return;
             
@@ -715,7 +759,7 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
             }
         });
 
-        // Modifié : Tri strict par date décroissante (les plus récents en haut), indépendamment de la couleur ou si lu
+        // Tri : uniquement du plus récent au plus ancien (Timestamp)
         newTasks.sort((a, b) => b.timestamp - a.timestamp);
 
         setTasks(newTasks);
@@ -732,7 +776,6 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
             const dog = dogs.find(d => d.id === task.dogId);
             if (dog) openForm('dog', dog);
         } else if (task.type === 'booking') {
-            // Sécurité anti-crash
             const booking = bookings.find(b => b.id === task.bookingId);
             if (booking) openForm('edit', booking);
         }
@@ -859,9 +902,9 @@ function App() {
     const openDogPicker = () => { pushHistory(); setIsDogPickerOpen(true); }; 
 
     useEffect(() => {
-        // Modifié : Sécurité supplémentaire si la connexion ne passe jamais pour forcer l'UI
+        // Démarrage forcé après quelques secondes pour éviter l'écran blanc hors-ligne
         const timer = setTimeout(() => { setSplash(false); }, 2000);
-        const failSafeTimer = setTimeout(() => { setLoadingAuth(false); }, 4000); 
+        const failSafeTimer = setTimeout(() => { setLoadingAuth(false); }, 3500); 
 
         const unsub = window.onAuthStateChanged(window.auth, async (u) => {
             if (u) {
@@ -1007,7 +1050,6 @@ function App() {
                 </div></div>
             )}
             
-            {/* Modifié : L'image en plein écran n'a plus de marge (p-4) pour prendre tout l'espace et profite du viewport zoomable */}
             {fullImg && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center bg-stone-900/90 backdrop-blur-sm" onClick={() => { setFullImg(null); window.history.back(); }}>
                     <img src={fullImg} className="w-full h-full object-contain shadow-2xl"/>
@@ -1022,7 +1064,7 @@ const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<
 <script>
 if ('serviceWorker' in navigator) {
     const swCode = `
-        const CACHE_NAME = '4pattes-cache-v1.5'; 
+        const CACHE_NAME = '4pattes-cache-v2.2'; 
         
         self.addEventListener('fetch', event => {
             if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
@@ -1037,7 +1079,9 @@ if ('serviceWorker' in navigator) {
                         return response;
                     })
                     .catch(() => {
-                        return caches.match(event.request);
+                        return caches.match(event.request, { ignoreSearch: true }).then(response => {
+                            return response || caches.match('/', { ignoreSearch: true });
+                        });
                     })
             );
         });
