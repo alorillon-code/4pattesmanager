@@ -1,3 +1,58 @@
+Release Note (v2 officielle)
+
+🚀 4Pattes Manager - Version 2.0 (Mise à jour "Assistant")
+Cette mise à jour marque un tournant pour l'application : elle ne se contente plus de stocker vos informations, elle vous aide désormais à les gérer de manière proactive.
+
+🔔 Nouveau Cœur d'Application : L'Assistant "À Faire"
+L'onglet Historique (peu utilisé) a été remplacé par un véritable Centre de contrôle intelligent.
+
+Pastille de Notification : Un indicateur rouge apparaît dans votre menu avec le nombre d'actions requises.
+
+Alertes Intelligentes : L'application scanne votre base de données et génère des rappels automatiques pour :
+
+Évaluations (🟠) : Rappel systématique le lendemain de chaque séjour pour remplir ou confirmer la grille de comportement.
+
+Paiements (🔴) : Alerte sur les séjours terminés dont le statut est encore "À Payer" ou "Acompte".
+
+Prix Anormaux (🟡) : Détection des séjours à 0€ (hors RDV) ou dont le tarif journalier semble incohérent (moins de 10€/jour ou plus de 30€/jour).
+
+Infos Manquantes (🔵) : Regroupement intelligent en une seule alerte par chien s'il manque des données cruciales (Photo, Téléphone, Propriétaire, ou la "Source" sur l'une de ses réservations).
+
+Navigation par Swipe (Glissement) : * Glissez une carte vers la droite pour la marquer comme lue.
+
+Glissez vers la gauche pour la supprimer (Corbeille).
+
+Note de synchronisation : Les balayages sont locaux (propres à votre téléphone), mais la résolution du problème (ex: remplir l'info manquante) fera disparaître l'alerte sur tous les appareils !
+
+🌐 Mode Hors-Ligne Renforcé (PWA)
+L'application est désormais véritablement utilisable en déplacement, même sans réseau.
+
+Bandeau d'Alerte : Apparition d'un bandeau rouge "HORS LIGNE (LECTURE SEULE)" en cas de coupure de réseau.
+
+Sécurité des Données : Désactivation automatique des boutons de modification, d'ajout et de suppression pour éviter les conflits de sauvegarde.
+
+Tolérance aux micro-coupures : L'application attend 3 secondes avant de se bloquer en hors-ligne, évitant ainsi les alertes intempestives lors d'une baisse de réseau (ex: passage en tunnel).
+
+Moteur "Network First" : Le système de cache a été réécrit pour toujours privilégier la version la plus récente de vos données, tout en gardant un plan B infaillible en cas d'absence d'internet.
+
+📊 Comptabilité et Confidentialité
+Mode Confidentiel (Flou) : Ajout d'un bouton "Œil" (👁️) sur la page des Statistiques. Par défaut, tous les chiffres d'affaires (Global, Annuel, Graphiques, Top Clients) sont fortement floutés pour protéger vos données financières en présence de clients. Un simple clic dévoile les montants.
+
+Export CSV Opérationnel : Le bouton d'export génère désormais un fichier compatible Excel (séparateur point-virgule et encodage UTF-8) contenant l'historique propre de vos réservations (Chien, Propriétaire, Dates, Prix, Acompte, Statut, Source).
+
+🎨 Interface & Améliorations Ergonomiques
+Indicateurs de Paiement (Agenda) : Suivi visuel instantané directement sur les barres de réservation du calendrier.
+
+🔴 Point rouge si le séjour est "À Payer".
+
+🟠 Point orange si un "Acompte" a été versé mais que le solde est en attente.
+
+(Le point disparaît une fois le séjour "Payé" pour alléger l'affichage).
+
+Plein Écran Photo : Les photos de la galerie respectent désormais parfaitement leurs proportions d'origine (plus d'images écrasées).
+
+Bouton "Retour" natif : L'ouverture d'une photo en plein écran est désormais interceptée par le téléphone. L'utilisation du vrai bouton "Retour" d'Android ou d'iOS fermera la photo au lieu de fermer la fiche du chien.
+
 
 //////////////////////////////////////////////////////////////
 
