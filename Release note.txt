@@ -25,7 +25,7 @@ Glissez vers la gauche pour la supprimer (Corbeille).
 Note de synchronisation : Les balayages sont locaux (propres à votre téléphone), mais la résolution du problème (ex: remplir l'info manquante) fera disparaître l'alerte sur tous les appareils !
 
 🌐 Mode Hors-Ligne Renforcé (PWA)
-L'application est désormais véritablement utilisable en déplacement, même sans réseau.
+Mode partiellement fonctionnel. Impossible d'ouvrir en mode hors ligne mais le mode est détecté en corus d'utilisation de l'appli.
 
 Bandeau d'Alerte : Apparition d'un bandeau rouge "HORS LIGNE (LECTURE SEULE)" en cas de coupure de réseau.
 
