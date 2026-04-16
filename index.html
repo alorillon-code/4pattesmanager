@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <title>4Pattes Manager</title>
 
 <link rel="icon" type="image/png" href="logo.png">
@@ -20,7 +20,8 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
 <style>
-    body { background-color: #fafaf9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #44403c; margin:0; touch-action: none; }
+    /* Modifié : overscroll-behavior-y au lieu de touch-action pour permettre le scroll ! */
+    body { background-color: #fafaf9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #44403c; margin:0; overscroll-behavior-y: none; }
     input, textarea, select { font-size: 16px !important; }
     .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     
@@ -130,7 +131,7 @@ const EVAL_CRITERIA = [
 const WARNING_THRESHOLD = 80;
 const EXIGENT_THRESHOLD = 25;
 const BLACKLIST_THRESHOLD = 100;
-const MIN_PRICE_PER_DAY = 10; // Corrigé : Seuil abaissé à 10€
+const MIN_PRICE_PER_DAY = 10; 
 
 const S = {
     nav: "fixed bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-stone-200 h-16 z-50 flex justify-between px-6 pb-safe",
@@ -555,7 +556,6 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
     );
 };
 
-// --- NOUVEAU COMPOSANT : CARTE SWIPEABLE ---
 const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     const [startX, setStartX] = useState(0);
     const [currentX, setCurrentX] = useState(0);
@@ -618,7 +618,6 @@ const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     );
 };
 
-// --- NOUVEAU COMPOSANT : PAGE ASSISTANT ---
 const AssistantPage = ({ dogs, bookings, openForm }) => {
     const [tasks, setTasks] = useState([]);
     
@@ -636,12 +635,11 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
         let newTasks = [];
         const taskStates = getTaskStates();
 
-        const addAlerte = (id, type, title, desc, dogId, bookingId, colorClass, icon) => {
+        const addAlerte = (id, type, title, desc, dogId, bookingId, colorClass, icon, timestamp) => {
             if (taskStates[id] === 'deleted') return; 
-            newTasks.push({ id, type, title, desc, dogId, bookingId, colorClass, icon, isRead: taskStates[id] === 'read' });
+            newTasks.push({ id, type, title, desc, dogId, bookingId, colorClass, icon, isRead: taskStates[id] === 'read', timestamp });
         };
 
-        // 1. Scans des infos manquantes (Chiens + Sources des réservations)
         dogs.forEach(d => {
             let missing = [];
             if (!d.name || d.name === "Inconnu") missing.push("Nom");
@@ -651,7 +649,6 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
             if (d.gender === 'U') missing.push("Genre");
             if (!d.photo) missing.push("Photo");
 
-            // Recherche des réservations de ce chien sans source
             const dogBookings = bookings.filter(b => b.dogId === d.id);
             const bookingsMissingSource = dogBookings.filter(b => !b.source);
             
@@ -662,46 +659,45 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
             if (missing.length > 0) {
                 let targetType = 'dog';
                 let targetBooking = null;
+                // Modifié : On force la date la plus récente au sommet
+                let alertTimestamp = Date.now(); 
                 
                 if (bookingsMissingSource.length > 0) {
                     targetType = 'booking';
-                    // On prend la réservation la plus récente pour ouvrir la bonne pop-up
                     bookingsMissingSource.sort((a,b) => new Date(b.start) - new Date(a.start));
                     targetBooking = bookingsMissingSource[0];
+                    if (targetBooking.end) alertTimestamp = new Date(targetBooking.end).getTime();
+                } else if (dogBookings.length > 0) {
+                    // Si on a des réservations mais on modifie le chien, on prend la dernière pour l'ordre
+                    dogBookings.sort((a,b) => new Date(b.end) - new Date(a.end));
+                    if (dogBookings[0].end) alertTimestamp = new Date(dogBookings[0].end).getTime();
                 }
 
                 addAlerte(
-                    `missing_info_${d.id}`, 
-                    targetType, 
-                    `Infos manquantes : ${d.name}`, 
-                    `À compléter : ${missing.join(', ')}`, 
-                    d.id, 
-                    targetBooking, 
-                    'bg-blue-100 text-blue-600', 
-                    'fa-info-circle'
+                    `missing_info_${d.id}`, targetType, `Infos manquantes : ${d.name}`, `À compléter : ${missing.join(', ')}`, d.id, targetBooking?.id, 'bg-blue-100 text-blue-600', 'fa-info-circle', alertTimestamp
                 );
             }
         });
 
-        // 2. Scans des réservations (Paiement, Prix, Évaluation)
         bookings.forEach(b => {
+            if (!b.end) return; // Sécurité si date vide
             const endDate = new Date(b.end);
+            if (isNaN(endDate.getTime())) return;
+            
             endDate.setHours(0,0,0,0);
             const isPast = endDate < today;
+            const ts = endDate.getTime();
 
             if (isPast) {
-                // Paiement en attente
                 if (b.paymentStatus === 'pending' || b.paymentStatus === 'deposit') {
-                    addAlerte(`pay_${b.id}`, 'booking', `Paiement en attente : ${b.dogName}`, `Séjour terminé. Reste à encaisser : ${(b.price||0) - (b.deposit||0)}€`, b.dogId, b, 'bg-red-100 text-red-600', 'fa-euro-sign');
+                    addAlerte(`pay_${b.id}`, 'booking', `Paiement en attente : ${b.dogName}`, `Séjour terminé. Reste à encaisser : ${(b.price||0) - (b.deposit||0)}€`, b.dogId, b.id, 'bg-red-100 text-red-600', 'fa-euro-sign', ts);
                 }
 
-                // Évaluation systématique à faire après chaque séjour
                 const linkedDog = dogs.find(d => d.id === b.dogId);
                 if (linkedDog) {
-                    addAlerte(`eval_${b.id}`, 'dog', `Évaluer le séjour de ${b.dogName}`, `Séjour terminé. N'oubliez pas de remplir la grille de comportement.`, b.dogId, null, 'bg-orange-100 text-orange-600', 'fa-clipboard-check');
+                    addAlerte(`eval_${b.id}`, 'dog', `Évaluer le séjour de ${b.dogName}`, `Séjour terminé. N'oubliez pas de remplir la grille de comportement.`, b.dogId, null, 'bg-orange-100 text-orange-600', 'fa-clipboard-check', ts);
                 }
 
-                // Prix anormal (hors RDV)
                 if (b.paymentStatus !== 'appointment') {
                     const startDate = new Date(b.start); startDate.setHours(0,0,0,0);
                     const nbDays = Math.max(1, Math.ceil((endDate - startDate) / 86400000) + 1);
@@ -709,21 +705,18 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
                     const pricePerDay = total / nbDays;
 
                     if (total === 0) {
-                        addAlerte(`price_zero_${b.id}`, 'booking', `Prix à 0€ : ${b.dogName}`, `Le séjour de ${nbDays} jours est facturé 0€. Est-ce normal ?`, b.dogId, b, 'bg-yellow-100 text-yellow-600', 'fa-exclamation-triangle');
+                        addAlerte(`price_zero_${b.id}`, 'booking', `Prix à 0€ : ${b.dogName}`, `Le séjour de ${nbDays} jours est facturé 0€. Est-ce normal ?`, b.dogId, b.id, 'bg-yellow-100 text-yellow-600', 'fa-exclamation-triangle', ts);
                     } else if (pricePerDay < MIN_PRICE_PER_DAY) {
-                        addAlerte(`price_low_${b.id}`, 'booking', `Prix faible : ${b.dogName}`, `Le tarif calculé est de ${Math.round(pricePerDay)}€/jour. Vérifiez le montant.`, b.dogId, b, 'bg-yellow-100 text-yellow-600', 'fa-exclamation-triangle');
+                        addAlerte(`price_low_${b.id}`, 'booking', `Prix faible : ${b.dogName}`, `Le tarif calculé est de ${Math.round(pricePerDay)}€/jour. Vérifiez le montant.`, b.dogId, b.id, 'bg-yellow-100 text-yellow-600', 'fa-exclamation-triangle', ts);
                     } else if (pricePerDay > 30) {
-                        addAlerte(`price_high_${b.id}`, 'booking', `Prix élevé : ${b.dogName}`, `Le tarif calculé est de ${Math.round(pricePerDay)}€/jour. Vérifiez le montant.`, b.dogId, b, 'bg-yellow-100 text-yellow-600', 'fa-exclamation-triangle');
+                        addAlerte(`price_high_${b.id}`, 'booking', `Prix élevé : ${b.dogName}`, `Le tarif calculé est de ${Math.round(pricePerDay)}€/jour. Vérifiez le montant.`, b.dogId, b.id, 'bg-yellow-100 text-yellow-600', 'fa-exclamation-triangle', ts);
                     }
                 }
             }
         });
 
-        const colorWeight = { 'bg-red-100 text-red-600': 1, 'bg-orange-100 text-orange-600': 2, 'bg-yellow-100 text-yellow-600': 3, 'bg-blue-100 text-blue-600': 4 };
-        newTasks.sort((a, b) => {
-            if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-            return colorWeight[a.colorClass] - colorWeight[b.colorClass];
-        });
+        // Modifié : Tri strict par date décroissante (les plus récents en haut), indépendamment de la couleur ou si lu
+        newTasks.sort((a, b) => b.timestamp - a.timestamp);
 
         setTasks(newTasks);
         
@@ -739,7 +732,9 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
             const dog = dogs.find(d => d.id === task.dogId);
             if (dog) openForm('dog', dog);
         } else if (task.type === 'booking') {
-            openForm('edit', task.bookingId);
+            // Sécurité anti-crash
+            const booking = bookings.find(b => b.id === task.bookingId);
+            if (booking) openForm('edit', booking);
         }
     };
 
@@ -864,17 +859,20 @@ function App() {
     const openDogPicker = () => { pushHistory(); setIsDogPickerOpen(true); }; 
 
     useEffect(() => {
-        const timer = setTimeout(() => setSplash(false), 2000);
+        // Modifié : Sécurité supplémentaire si la connexion ne passe jamais pour forcer l'UI
+        const timer = setTimeout(() => { setSplash(false); }, 2000);
+        const failSafeTimer = setTimeout(() => { setLoadingAuth(false); }, 4000); 
+
         const unsub = window.onAuthStateChanged(window.auth, async (u) => {
             if (u) {
                 if (ALLOWED_EMAILS.includes(u.email)) {
-                    setUser(u); setLoadingAuth(false);
+                    setUser(u); setLoadingAuth(false); clearTimeout(failSafeTimer);
                     try { const result = await window.getRedirectResult(window.auth); } catch (error) { console.error("Redirect Error", error); }
                     setTimeout(() => { if (!window.fire) return; const { collection, onSnapshot, query, orderBy, limit } = window.fire; const db = window.db; onSnapshot(collection(db, "dogs"), (snap) => setDogs(snap.docs.map(d => ({...d.data(), id: d.id})))); onSnapshot(collection(db, "bookings"), (snap) => setBookings(snap.docs.map(d => ({...d.data(), id: d.id})))); }, 500);
-                } else { alert("Accès refusé. Cet email n'est pas autorisé."); await window.signOut(window.auth); setUser(null); setLoadingAuth(false); }
-            } else { setUser(null); setLoadingAuth(false); }
+                } else { alert("Accès refusé. Cet email n'est pas autorisé."); await window.signOut(window.auth); setUser(null); setLoadingAuth(false); clearTimeout(failSafeTimer); }
+            } else { setUser(null); setLoadingAuth(false); clearTimeout(failSafeTimer); }
         });
-        return () => { clearTimeout(timer); unsub(); };
+        return () => { clearTimeout(timer); clearTimeout(failSafeTimer); unsub(); };
     }, []);
 
     const login = async () => { setLoadingAuth(true); try { const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent); if (isMobile) { await window.signInWithRedirect(window.auth, window.googleProvider); } else { await window.signInWithPopup(window.auth, window.googleProvider); } } catch (e) { alert("Erreur connexion: " + e.message); setLoadingAuth(false); } };
@@ -1009,9 +1007,10 @@ function App() {
                 </div></div>
             )}
             
+            {/* Modifié : L'image en plein écran n'a plus de marge (p-4) pour prendre tout l'espace et profite du viewport zoomable */}
             {fullImg && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-stone-900/90 backdrop-blur-sm p-4" onClick={() => { setFullImg(null); window.history.back(); }}>
-                    <img src={fullImg} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"/>
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-stone-900/90 backdrop-blur-sm" onClick={() => { setFullImg(null); window.history.back(); }}>
+                    <img src={fullImg} className="w-full h-full object-contain shadow-2xl"/>
                 </div>
             )}
         </div>
@@ -1023,7 +1022,7 @@ const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<
 <script>
 if ('serviceWorker' in navigator) {
     const swCode = `
-        const CACHE_NAME = '4pattes-cache-v1.4'; 
+        const CACHE_NAME = '4pattes-cache-v1.5'; 
         
         self.addEventListener('fetch', event => {
             if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
