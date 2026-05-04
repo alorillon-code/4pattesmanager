@@ -20,7 +20,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
 <style>
-    body { background-color: #fafaf9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #44403c; margin:0; }
+    body { background-color: #fafaf9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; color: #44403c; margin:0; overscroll-behavior-y: none; }
     input, textarea, select { font-size: 16px !important; }
     .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     
@@ -64,7 +64,6 @@
     .animate-marquee { animation: marquee 8s linear infinite alternate; }
     @keyframes marquee { 0% { transform: translateX(0); } 20% { transform: translateX(0); } 100% { transform: translateX(calc(-100% + 80%)); } }
 
-    /* Règles CSS clés pour autoriser le scroll vertical (pan-y) natif du navigateur */
     .swipe-container { position: relative; overflow: hidden; border-radius: 0.75rem; margin-bottom: 0.75rem; touch-action: pan-y; }
     .swipe-bg-left { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-start; padding-left: 1.5rem; background-color: #10b981; color: white; font-weight: bold; } 
     .swipe-bg-right { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 1.5rem; background-color: #ef4444; color: white; font-weight: bold; } 
@@ -591,38 +590,31 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
     );
 };
 
-// --- MODIFIÉ : Logique de Swipe réécrite pour abandonner si défilement vertical détecté ---
 const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     const [offset, setOffset] = useState(0);
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
     const isSwiping = useRef(false);
-    const isScrolling = useRef(false);
 
     const onTouchStart = (e) => {
         touchStartX.current = e.touches[0].clientX;
         touchStartY.current = e.touches[0].clientY;
-        isSwiping.current = true;
-        isScrolling.current = false;
+        isSwiping.current = false; // On ne sait pas encore l'intention
     };
 
     const onTouchMove = (e) => {
-        if (isScrolling.current) return; // Laisse le navigateur scroller
-        if (!isSwiping.current) return;
-
         const diffX = e.touches[0].clientX - touchStartX.current;
         const diffY = e.touches[0].clientY - touchStartY.current;
 
-        // Si le mouvement vertical est supérieur au mouvement horizontal ET dépasse 5px
-        if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 5) {
-            isScrolling.current = true;
-            isSwiping.current = false;
-            setOffset(0); // Annule visuellement le swipe
-            return;
+        // Si l'utilisateur scroll verticalement, on ne fait rien (pas de swipe)
+        if (Math.abs(diffY) > 5 && !isSwiping.current) {
+            return; 
         }
 
-        // Si c'est bien un swipe horizontal
-        if (Math.abs(diffX) > 5) {
+        // Si c'est un swipe horizontal clair
+        if (Math.abs(diffX) > 10) {
+            isSwiping.current = true;
+            e.preventDefault(); // Empêche le scroll du navigateur pendant le swipe
             if (diffX > -100 && diffX < 100) {
                 setOffset(diffX);
             }
@@ -630,15 +622,18 @@ const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     };
 
     const onTouchEnd = () => {
-        isSwiping.current = false;
-        if (isScrolling.current) return;
-
+        if (!isSwiping.current) {
+            setOffset(0);
+            return;
+        }
+        
         if (offset > 60) {
             onMarkRead(task.id);
         } else if (offset < -60) {
             onDelete(task.id);
         }
         setOffset(0);
+        isSwiping.current = false;
     };
 
     const isRead = task.isRead;
@@ -788,7 +783,6 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
 
     const unread = tasks.filter(t => !t.isRead).length;
 
-    // --- MODIFIÉ : Application de la structure exacte du Carnet pour forcer le scroll ---
     return (
         <div className="flex h-full bg-stone-50">
             <div className="flex-1 overflow-y-auto p-4 pb-32 no-scrollbar scroll-smooth">
@@ -909,7 +903,6 @@ function App() {
     const openDogPicker = () => { pushHistory(); setIsDogPickerOpen(true); }; 
 
     useEffect(() => {
-        // --- MODIFIÉ : Retrait instantané du splash si l'UI charge ---
         setTimeout(() => { document.getElementById('native-splash')?.remove(); }, 1500);
 
         const unsub = window.onAuthStateChanged(window.auth, async (u) => {
@@ -952,20 +945,43 @@ function App() {
         try { 
             const { addDoc, updateDoc, doc, collection } = window.fire; const db = window.db; let dId = form.dogId; const clean = (val) => val === undefined || val === null ? "" : val; const newColor = internalGetGenderColor(form.gender, dId); 
             const dogData = { name: clean(form.dogName)||"Inconnu", breed: clean(form.breed), owner: clean(form.ownerName), phone: clean(form.phone), notes: clean(form.dogNotes), photo: form.photo||null, gallery: form.gallery || [], eval: form.eval || {}, color: newColor, gender: form.gender, birthdate: clean(form.birthdate) }; 
+            
             if (dId) { await updateDoc(doc(db, "dogs", dId), dogData); } else { const ref = await addDoc(collection(db, "dogs"), {...dogData}); dId = ref.id; } 
+            
             if (!isDogMode) { 
                 const isAllDay = form.isAllDay; let startDate = clean(form.start) || ''; let endDate = clean(form.end) || ''; 
                 if (!startDate || !endDate) { alert("Veuillez sélectionner une période de séjour valide."); return; } 
                 if (!isAllDay) { const baseStart = startDate.includes('T') ? startDate.split('T')[0] : startDate; const baseEnd = endDate.includes('T') ? endDate.split('T')[0] : endDate; startDate = baseStart + 'T' + clean(form.startTime) + ':00'; endDate = baseEnd + 'T' + clean(form.endTime) + ':00'; } else if (startDate.includes('T')) { startDate = startDate.split('T')[0]; endDate = endDate.split('T')[0]; } 
                 let price = clean(form.price) || "0"; let deposit = clean(form.deposit) || ""; if (form.paymentStatus === 'appointment') { price = "0"; deposit = ""; } 
                 const bookData = { dogId: dId, dogName: clean(form.dogName), breed: clean(form.breed), ownerName: clean(form.ownerName), phone: clean(form.phone), price: price, start: startDate, end: endDate, color: newColor, notes: clean(form.bookingNotes), source: clean(form.source), paymentStatus: form.paymentStatus||'pending', deposit: deposit, isAllDay: isAllDay, startTime: clean(form.startTime), endTime: clean(form.endTime), photo: form.photo || null, gender: form.gender, isProvisional: form.isProvisional || false }; 
-                if (editId) { await updateDoc(doc(db, "bookings", editId), bookData); } else { await addDoc(collection(db, "bookings"), bookData); } 
+                
+                if (editId) { 
+                    const oldBooking = bookings.find(b => b.id === editId); 
+                    await updateDoc(doc(db, "bookings", editId), bookData); 
+                    if (oldBooking && (oldBooking.start !== bookData.start || oldBooking.end !== bookData.end)) {
+                        sendMail("MODIFICATION DATES", {...bookData, dogNotes: form.dogNotes, bookingNotes: form.bookingNotes}, oldBooking); 
+                    }
+                } else { 
+                    await addDoc(collection(db, "bookings"), bookData); 
+                    sendMail("NOUVELLE RÉSERVATION", {...bookData, dogNotes: form.dogNotes, bookingNotes: form.bookingNotes}); 
+                } 
             } 
             setModal(false); setIsEditing(false); 
         } catch (err) { console.error(err); alert("Erreur: "+err.message); } 
     };
     
-    const remove = async () => { if(!confirm("Supprimer ?")) return; const { deleteDoc, doc } = window.fire; const db = window.db; if (isDogMode) { await deleteDoc(doc(db, "dogs", form.id)); setSelectedDog(null); } else { await deleteDoc(doc(db, "bookings", editId)); } setModal(false); setIsEditing(false); };
+    const remove = async () => { 
+        if(!confirm("Supprimer ?")) return; 
+        const { deleteDoc, doc } = window.fire; const db = window.db; 
+        if (isDogMode) { 
+            await deleteDoc(doc(db, "dogs", form.id)); 
+            setSelectedDog(null); 
+        } else { 
+            await deleteDoc(doc(db, "bookings", editId)); 
+            sendMail("SUPPRESSION SÉJOUR", {...form});
+        } 
+        setModal(false); setIsEditing(false); 
+    };
     
     const handleFabClick = () => { 
         if (isOffline) { alert("Action impossible hors ligne."); return; }
@@ -1070,7 +1086,7 @@ const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<
 <script>
 if ('serviceWorker' in navigator) {
     const swCode = `
-        const CACHE_NAME = '4pattes-cache-v2.4'; 
+        const CACHE_NAME = '4pattes-cache-v2.5'; 
         
         self.addEventListener('fetch', event => {
             if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
