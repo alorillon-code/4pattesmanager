@@ -1085,47 +1085,52 @@ const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<
 
 <script>
 if ('serviceWorker' in navigator) {
-    const swCode = `
-        const CACHE_NAME = '4pattes-cache-v2.5'; 
+    // On passe à la V2.6 pour forcer ton navigateur à prendre le nouveau filtre
+    const CACHE_NAME = '4pattes-cache-v2.6'; 
+    
+    self.addEventListener('fetch', event => {
+        // 1. On ignore les requêtes non-GET ou non-HTTP
+        if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
         
-        self.addEventListener('fetch', event => {
-            if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
-            
-            event.respondWith(
-                caches.match(event.request).then(cachedResponse => {
-                    const fetchPromise = fetch(event.request).then(networkResponse => {
-                        caches.open(CACHE_NAME).then(cache => {
-                            cache.put(event.request, networkResponse.clone());
-                        });
-                        return networkResponse;
-                    }).catch(() => {
-                        console.log("Hors-ligne : Utilisation du cache.");
+        // 2. NOUVEAU : On interdit au cache de toucher aux requêtes d'authentification Firebase et Google !
+        const url = event.request.url;
+        if (url.includes('firebase') || url.includes('googleapis') || url.includes('accounts.google.com')) {
+            return; // Le "return" vide dit au Service Worker de laisser passer la requête normalement.
+        }
+        
+        // 3. Logique de cache normale pour le reste de l'application
+        event.respondWith(
+            caches.match(event.request).then(cachedResponse => {
+                const fetchPromise = fetch(event.request).then(networkResponse => {
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, networkResponse.clone());
                     });
-                    
-                    return cachedResponse || fetchPromise;
-                })
-            );
-        });
+                    return networkResponse;
+                }).catch(() => {
+                    console.log("Hors-ligne : Utilisation du cache.");
+                });
+                
+                return cachedResponse || fetchPromise;
+            })
+        );
+    });
 
-        self.addEventListener('activate', event => {
-            event.waitUntil(
-                caches.keys().then(cacheNames => {
-                    return Promise.all(
-                        cacheNames.map(cacheName => {
-                            if (cacheName !== CACHE_NAME) {
-                                return caches.delete(cacheName);
-                            }
-                        })
-                    );
-                })
-            );
-        });
-    `;
-    const blob = new Blob([swCode], {type: 'application/javascript'});
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl).catch(err => console.log('SW error', err));
+    self.addEventListener('activate', event => {
+        event.waitUntil(
+            caches.keys().then(cacheNames => {
+                return Promise.all(
+                    cacheNames.map(cacheName => {
+                        if (cacheName !== CACHE_NAME) {
+                            return caches.delete(cacheName);
+                        }
+                    })
+                );
+            })
+        );
+    });
 }
 </script>
+
 
 </body>
 </html>
