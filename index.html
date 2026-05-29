@@ -69,17 +69,23 @@
     .swipe-bg-right { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 1.5rem; background-color: #ef4444; color: white; font-weight: bold; } 
     .swipe-content { position: relative; background: white; z-index: 10; border: 1px solid #e7e5e4; border-radius: 0.75rem; touch-action: pan-y; }
     .swipe-content.transition-transform { transition: transform 0.2s ease-out; }
+
+
 </style>
 </head>
 <body>
 
 <div id="native-splash" style="position:fixed;inset:0;background-color:#fafaf9;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s;">
     <img src="logo.png" style="width:128px;height:128px;border-radius:24px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);margin-bottom:24px;object-fit:cover;border:4px solid white;" onerror="this.style.display='none'" />
-    <h1 style="font-size:36px;font-family:serif;font-weight:bold;color:#44403c;text-align:center;line-height:1.1;">Bonjour Chouchou,<br/>je t'aime</h1>
-    <div style="font-size:14px;color:#a8a29e;font-weight:bold;text-transform:uppercase;letter-spacing:0.1em;margin-top:8px;">4 Pattes Manager</div>
+    <h1 style="font-size:36px;font-family:serif;font-weight:bold;color:#44403c;text-align:center;line-height:1.1;">Bonjour Chouchou</h1>
+    <h1 style="font-size:36px;font-family:serif;font-weight:bold;color:#44403c;text-align:center;line-height:1.1;margin-top:20px;">Je t'aime ❤️</h1>
+
+    <div style="font-size:14px;color:#a8a29e;font-weight:bold;text-transform:uppercase;letter-spacing:0.1em;margin-top:50px;">4 Pattes Manager</div>
+    <div style="font-size:12px;color:#bdbbb9;margin-top:4px;">Version 2.7</div>
 </div>
 
 <div id="root"></div>
+
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -133,7 +139,7 @@ const EVAL_CRITERIA = [
 ];
 
 const WARNING_THRESHOLD = 80;
-const EXIGENT_THRESHOLD = 25;
+const EXIGENT_THRESHOLD = 31;
 const BLACKLIST_THRESHOLD = 100;
 const MIN_PRICE_PER_DAY = 10; 
 
@@ -262,13 +268,24 @@ const BehaviorEvaluation = ({ evalData, setForm, isEditing }) => {
         if (!isEditing) return;
         setForm(prev => ({ ...prev, eval: { ...prev.eval, blacklistReason: txt } }));
     };
+    
+    // NOUVEAU : Logique de la Garde Idéale
+    const toggleIdeal = () => {
+        if (!isEditing) return;
+        const newVal = !evalData?.isIdeal;
+        setForm(prev => ({ ...prev, eval: { ...prev.eval, isIdeal: newVal } }));
+    };
+
     const currentScore = calculateScore(evalData);
     let scoreColor = 'bg-emerald-100 text-emerald-700';
     let scoreLabel = 'Facile';
     if (currentScore >= BLACKLIST_THRESHOLD) { scoreColor = 'bg-stone-800 text-white animate-pulse border-2 border-red-500'; scoreLabel = '⛔ BLACKLIST'; }
     else if (currentScore >= WARNING_THRESHOLD) { scoreColor = 'bg-red-100 text-red-700 font-bold'; scoreLabel = '⚠️⚠️ À ÉVITER'; }
     else if (currentScore > EXIGENT_THRESHOLD) { scoreColor = 'bg-orange-100 text-orange-700'; scoreLabel = '⚠️ Exigeant'; }
+    
     const isBlacklisted = evalData?.isBlacklisted || false;
+    const isIdeal = evalData?.isIdeal || false;
+
     return (
         <div className="mt-4 mb-4">
             <div className="flex justify-between items-center mb-2">
@@ -292,6 +309,12 @@ const BehaviorEvaluation = ({ evalData, setForm, isEditing }) => {
                     );
                 })}
                 <div className="pt-4 mt-2 border-t border-stone-200">
+                    {/* NOUVEAU BOUTON GARDE IDÉALE */}
+                    <button onClick={toggleIdeal} disabled={!isEditing} className={`w-full py-2 mb-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors ${isIdeal ? 'bg-rose-100 text-rose-600 border border-rose-200 shadow-sm' : 'bg-stone-200 text-stone-500 hover:bg-stone-300'}`}>
+                        <i className={`fas fa-heart ${isIdeal ? 'text-rose-500' : ''}`}></i>
+                        {isIdeal ? 'GARDE IDÉALE' : 'MARQUER COMME GARDE IDÉALE'}
+                    </button>
+                    
                     <button onClick={toggleBlacklist} disabled={!isEditing} className={`w-full py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors ${isBlacklisted ? 'bg-stone-800 text-white hover:bg-stone-700' : 'bg-stone-200 text-stone-500 hover:bg-stone-300'}`}>{isBlacklisted ? <i className="fas fa-ban text-red-500"></i> : <i className="fas fa-ban"></i>}{isBlacklisted ? 'CHIEN BLACKLISTÉ (+100pts)' : 'BLACKLISTER CE CHIEN'}</button>
                     {isBlacklisted && (<div className="mt-2 animate-fadeIn"><label className="text-[10px] font-bold text-red-500 uppercase block mb-1">Raison du refus</label><input type="text" value={evalData?.blacklistReason || ''} onChange={(e) => updateBlacklistReason(e.target.value)} disabled={!isEditing} className="w-full text-xs p-2 border border-red-200 bg-red-50 rounded-lg text-red-900 placeholder-red-300 focus:ring-red-200" placeholder="Ex: A mordu, détruit..." /></div>)}
                 </div>
@@ -398,9 +421,10 @@ const Calendar = ({ date, setDate, openForm, bookings, dogs, isOffline }) => {
             const linkedDog = dogs.find(d => d.id === ev.dogId);
             const score = calculateScore(linkedDog?.eval);
             let badgeIcon = "";
-            if (score >= BLACKLIST_THRESHOLD) badgeIcon = "⛔ "; 
-            else if (score >= WARNING_THRESHOLD) badgeIcon = "⚠️⚠️ "; 
-            else if (score > EXIGENT_THRESHOLD) badgeIcon = "⚠️ "; 
+            if (linkedDog?.eval?.isIdeal) badgeIcon += "❤️ "; // Cœur avant le nom
+            if (score >= BLACKLIST_THRESHOLD) badgeIcon += "⛔ "; 
+            else if (score >= WARNING_THRESHOLD) badgeIcon += "⚠️⚠️ "; 
+            else if (score > EXIGENT_THRESHOLD) badgeIcon += "⚠️ ";
             
             let paymentBadge = "";
             if (ev.paymentStatus === 'pending') paymentBadge = "🔴 ";
@@ -550,7 +574,9 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
                 <div className="flex-1 overflow-y-auto p-4 pb-32">
                     <div className="bg-white p-6 rounded-3xl shadow-sm flex flex-col items-center mb-4">
                         {selectedDog.photo ? <img src={selectedDog.photo} className={S.avatarLarge + " cursor-pointer hover:opacity-90 transition-opacity"} onClick={() => onOpenGallery(selectedDog)} /> : <div className={S.avatarLarge} style={{background:selectedDog.color, color:'#fff'}} onClick={() => onOpenGallery(selectedDog)}>{selectedDog.name[0]}</div>}
-                        <h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">{selectedDog.name}</h2>
+                        <h2 className="text-3xl font-serif font-bold text-stone-700 mt-2">
+                        {selectedDog.name} {selectedDog.eval?.isIdeal && '❤️'}
+                        </h2>
                         <p className="text-stone-500 font-medium italic">{selectedDog.breed}</p>
                         {ageString && (<p className="text-xs font-bold text-stone-400 mt-1 uppercase tracking-widest">{ageString} ({selectedDog.birthdate})</p>)}
                         {badge}
@@ -577,11 +603,14 @@ const Directory = ({ dogs, bookings, openForm, pickDog, setSelectedDog, selected
                     if (item.type === 'header') { const currentDogsUpcoming = dogsUpcoming.filter(d => d.id); return (<div key={item.label} className="text-xs font-bold text-rose-400 mb-2 pl-2 mt-4 sticky top-28 bg-stone-50 z-10">{item.label} {item.label === 'Prochaines Arrivées' && currentDogsUpcoming.length > 0 && currentDogsUpcoming[0].nextArrival && (<span className="text-stone-400 font-normal ml-2 text-[10px]">(Prochaine le {currentDogsUpcoming[0].nextArrival.toLocaleDateString()})</span>)}</div>); } 
                     else { 
                         const score = calculateScore(item.eval);
-                        let badgeClass = ""; let icon = null;
+                       let badgeClass = ""; let icon = null;
                         if (score >= BLACKLIST_THRESHOLD) { badgeClass = "border-stone-800 border-r-4 bg-stone-50"; icon = <i className="fas fa-ban text-red-600 text-lg ml-2 animate-pulse" title="Blacklisté"></i>; }
                         else if (score >= WARNING_THRESHOLD) { badgeClass = "border-red-500 border-r-4"; icon = <span className="text-sm ml-1 tracking-tighter">⚠️⚠️</span>; }
                         else if (score > EXIGENT_THRESHOLD) { badgeClass = "border-orange-300 border-r-4"; icon = <span className="text-sm ml-1">⚠️</span>; }
-                        return ( <div key={item.id} onClick={() => handleDogClick(item)} className={`${S.card} ${badgeClass}`} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700 flex items-center">{item.name} {icon}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> ); 
+                        
+                        let idealIcon = item.eval?.isIdeal ? <span className="text-sm ml-1">❤️</span> : null;
+                        
+                        return ( <div key={item.id} onClick={() => handleDogClick(item)} className={`${S.card} ${badgeClass}`} style={{borderColor: item.color, borderLeftWidth: '5px'}}>{item.photo ? <img src={item.photo} className={S.avatar}/> : <div className={S.avatar} style={{backgroundColor:item.color, color:'#fff'}}>{item.name[0]}</div>}<div className="flex-1"><div className="font-bold text-lg text-stone-700 flex items-center">{item.name} {idealIcon} {icon}</div><div className="text-stone-500 text-xs uppercase font-bold">{item.breed}</div></div>{item.nextArrival && (<div className="text-right text-stone-500 text-xs font-medium">Arrivée: {item.nextArrival.toLocaleDateString()}</div>)}</div> );
                     }
                 })}
             </div>
@@ -595,26 +624,30 @@ const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
     const isSwiping = useRef(false);
+    const isScrolling = useRef(false);
 
     const onTouchStart = (e) => {
         touchStartX.current = e.touches[0].clientX;
         touchStartY.current = e.touches[0].clientY;
-        isSwiping.current = false; // On ne sait pas encore l'intention
+        isSwiping.current = true;
+        isScrolling.current = false;
     };
 
     const onTouchMove = (e) => {
+        if (isScrolling.current) return; 
+        if (!isSwiping.current) return;
+
         const diffX = e.touches[0].clientX - touchStartX.current;
         const diffY = e.touches[0].clientY - touchStartY.current;
 
-        // Si l'utilisateur scroll verticalement, on ne fait rien (pas de swipe)
-        if (Math.abs(diffY) > 5 && !isSwiping.current) {
-            return; 
+        if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 5) {
+            isScrolling.current = true;
+            isSwiping.current = false;
+            setOffset(0); 
+            return;
         }
 
-        // Si c'est un swipe horizontal clair
-        if (Math.abs(diffX) > 10) {
-            isSwiping.current = true;
-            e.preventDefault(); // Empêche le scroll du navigateur pendant le swipe
+        if (Math.abs(diffX) > 5) {
             if (diffX > -100 && diffX < 100) {
                 setOffset(diffX);
             }
@@ -622,18 +655,15 @@ const SwipeableTask = ({ task, onMarkRead, onDelete, onClick }) => {
     };
 
     const onTouchEnd = () => {
-        if (!isSwiping.current) {
-            setOffset(0);
-            return;
-        }
-        
+        isSwiping.current = false;
+        if (isScrolling.current) return;
+
         if (offset > 60) {
             onMarkRead(task.id);
         } else if (offset < -60) {
             onDelete(task.id);
         }
         setOffset(0);
-        isSwiping.current = false;
     };
 
     const isRead = task.isRead;
@@ -761,9 +791,7 @@ const AssistantPage = ({ dogs, bookings, openForm }) => {
         });
 
         newTasks.sort((a, b) => b.timestamp - a.timestamp);
-
         setTasks(newTasks);
-        
         const unreadCount = newTasks.filter(t => !t.isRead).length;
         window.dispatchEvent(new CustomEvent('updateBadge', { detail: unreadCount }));
 
@@ -917,7 +945,7 @@ function App() {
         return () => { unsub(); };
     }, []);
 
-    const login = async () => { setLoadingAuth(true); try { const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent); if (isMobile) { await window.signInWithRedirect(window.auth, window.googleProvider); } else { await window.signInWithPopup(window.auth, window.googleProvider); } } catch (e) { alert("Erreur connexion: " + e.message); setLoadingAuth(false); } };
+    const login = async () => { setLoadingAuth(true); try { const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent); if (isMobile) { await window.signInWithPopup(window.auth, window.googleProvider); } else { await window.signInWithPopup(window.auth, window.googleProvider); } } catch (e) { alert("Erreur connexion (Désactive ton VPN si le problème persiste): " + e.message); setLoadingAuth(false); } };
 
     const openForm = (type, data = {}) => {
         pushHistory(); setEditId(data.id || null); setIsDogMode(type === 'dog');
@@ -1085,52 +1113,52 @@ const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<
 
 <script>
 if ('serviceWorker' in navigator) {
-    // On passe à la V2.6 pour forcer ton navigateur à prendre le nouveau filtre
-    const CACHE_NAME = '4pattes-cache-v2.6'; 
-    
-    self.addEventListener('fetch', event => {
-        // 1. On ignore les requêtes non-GET ou non-HTTP
-        if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
+    const swCode = `
+        const CACHE_NAME = '4pattes-cache-v2.7'; 
         
-        // 2. NOUVEAU : On interdit au cache de toucher aux requêtes d'authentification Firebase et Google !
-        const url = event.request.url;
-        if (url.includes('firebase') || url.includes('googleapis') || url.includes('accounts.google.com')) {
-            return; // Le "return" vide dit au Service Worker de laisser passer la requête normalement.
-        }
-        
-        // 3. Logique de cache normale pour le reste de l'application
-        event.respondWith(
-            caches.match(event.request).then(cachedResponse => {
-                const fetchPromise = fetch(event.request).then(networkResponse => {
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, networkResponse.clone());
+        self.addEventListener('fetch', event => {
+            if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
+            
+            const url = event.request.url;
+            if (url.includes('firebase') || url.includes('googleapis') || url.includes('accounts.google.com')) {
+                return;
+            }
+            
+            event.respondWith(
+                caches.match(event.request).then(cachedResponse => {
+                    const fetchPromise = fetch(event.request).then(networkResponse => {
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, networkResponse.clone());
+                        });
+                        return networkResponse;
+                    }).catch(() => {
+                        console.log("Hors-ligne : Utilisation du cache.");
                     });
-                    return networkResponse;
-                }).catch(() => {
-                    console.log("Hors-ligne : Utilisation du cache.");
-                });
-                
-                return cachedResponse || fetchPromise;
-            })
-        );
-    });
+                    
+                    return cachedResponse || fetchPromise;
+                })
+            );
+        });
 
-    self.addEventListener('activate', event => {
-        event.waitUntil(
-            caches.keys().then(cacheNames => {
-                return Promise.all(
-                    cacheNames.map(cacheName => {
-                        if (cacheName !== CACHE_NAME) {
-                            return caches.delete(cacheName);
-                        }
-                    })
-                );
-            })
-        );
-    });
+        self.addEventListener('activate', event => {
+            event.waitUntil(
+                caches.keys().then(cacheNames => {
+                    return Promise.all(
+                        cacheNames.map(cacheName => {
+                            if (cacheName !== CACHE_NAME) {
+                                return caches.delete(cacheName);
+                            }
+                        })
+                    );
+                })
+            );
+        });
+    `;
+    const blob = new Blob([swCode], {type: 'application/javascript'});
+    const swUrl = URL.createObjectURL(blob);
+    navigator.serviceWorker.register(swUrl).catch(err => console.log('SW error', err));
 }
 </script>
-
 
 </body>
 </html>
